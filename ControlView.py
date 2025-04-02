@@ -4,7 +4,6 @@ from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
 
-import SH1106
 import textwrap
 
 from View import View
