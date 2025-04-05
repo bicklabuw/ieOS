@@ -1,8 +1,9 @@
-from __future__ import annotations
 from enum import Enum
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
+
+from typing import List
 
 import textwrap
 
@@ -40,7 +41,7 @@ class KeyInput(Enum):
 #     BOTTOM = 4
 
 # Select the desired order for the Joystick help text to appear from top to bottom
-DEF_JOY_ORDER: list[JoystickInput] = [JoystickInput.UP, 
+DEF_JOY_ORDER: List[JoystickInput] = [JoystickInput.UP, 
                               JoystickInput.LEFT, 
                               JoystickInput.BUTTON, 
                               JoystickInput.RIGHT,
@@ -53,7 +54,7 @@ class ControlView(View):
                  key1_text = "", key2_text = "", key3_text = "",
                  cont_font: ImageFont = View.DEF_FONT, view_font: ImageFont = View.DEF_FONT,
                  sep_width: int = 3, sep_fill_width: int = 1, sep_fill_height: int = None,
-                 JOY_ORDER: list[JoystickInput] = DEF_JOY_ORDER):
+                 JOY_ORDER: List[JoystickInput] = DEF_JOY_ORDER):
         """
         Initializes an ControlView object
         
@@ -108,7 +109,7 @@ class ControlView(View):
         :param JOY_ORDER: The order the Joystick Inputs should be displayed as a list. 
         Any JoystickInputs not included in this list will get appended in the default order.
         Defaults to [UP, LEFT, BUTTON, RIGHT, DOWN]
-        :type JOY_ORDER: list[:class:`JoystickInput`]
+        :type JOY_ORDER: List[:class:`JoystickInput`]
         """
 
         super().__init__()

@@ -1,15 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Callable
-from PIL import ImageFont
 import Display
+from Components import Component
+from typing import List
 
 class View(ABC):
-    DEF_FONT: ImageFont = ImageFont.load_default()
-
     def __init__(self):
-        # Init the display
-        Display.init()
-
         # Set General Default View Constants
         self.CHAR_LINE_SPACE = 1 # Added space to each line (built in space)
         self.CHAR_WIDTH: int = 6 # No Space Between some chars - ONLY WORKS FOR DEFAULT FONT
@@ -21,47 +16,35 @@ class View(ABC):
         self.TEXT_COLOR: str = "WHITE"
 
         # Get the Screen Width and Height
-        self.SCREEN_WIDTH: int = Display.disp.width
-        self.SCREEN_HEIGHT: int = Display.disp.height
+        self.SCREEN_WIDTH: int = Display.SCREEN_WIDTH
+        self.SCREEN_HEIGHT: int = Display.SCREEN_HEIGHT
 
-        # Set Callbacks to None
-        self.on_key_1_press: Callable[[], None] = None
-        self.on_key_1_hold: Callable[[], None] = None
-        self.on_key_1_release: Callable[[bool], None] = None
+        # Set the list of components
+        self._components: List[Component] = []
+
+    def add_component(self, component: Component):
+        if not isinstance(component, Component):
+            raise TypeError("Component must be an instance of the Component class")
         
-        self.on_key_2_press: Callable[[], None] = None
-        self.on_key_2_hold: Callable[[], None] = None
-        self.on_key_2_release: Callable[[bool], None] = None
+        if component in self._components:
+            raise ValueError("Component already exists in the view")
         
-        self.on_key_3_press: Callable[[], None] = None
-        self.on_key_3_hold: Callable[[], None] = None
-        self.on_key_3_release: Callable[[bool], None] = None
+        # Add the component to the list
+        self._components.append(component)
+
+    def remove_component(self, component: Component):
+        if component not in self._components:
+            raise ValueError("Component not found in the view")
         
-        self.on_joy_up_press: Callable[[], None] = None
-        self.on_joy_up_hold: Callable[[], None] = None
-        self.on_joy_up_release: Callable[[bool], None] = None
-        
-        self.on_joy_down_press: Callable[[], None] = None
-        self.on_joy_down_hold: Callable[[], None] = None
-        self.on_joy_down_release: Callable[[bool], None] = None
-        
-        self.on_joy_left_press: Callable[[], None] = None
-        self.on_joy_left_hold: Callable[[], None] = None
-        self.on_joy_left_release: Callable[[bool], None] = None
-        
-        self.on_joy_right_press: Callable[[], None] = None
-        self.on_joy_right_hold: Callable[[], None] = None
-        self.on_joy_right_release: Callable[[bool], None] = None
-        
-        self.on_joy_button_press: Callable[[], None] = None
-        self.on_joy_button_hold: Callable[[], None] = None
-        self.on_joy_button_release: Callable[[bool], None] = None
-        
-        self.on_appear: Callable[[], None] = None
-        self.on_disappear: Callable[[], None] = None
+        # Remove the component from the list
+        self._components.remove(component)
+
+    def get_components(self) -> List[Component]:
+        return self._components
     
-    @abstractmethod
-    def draw():
-        pass
+    def clear_components(self):
+        self._components.clear()
+    
+
     
     

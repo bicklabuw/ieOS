@@ -2,26 +2,12 @@ import sounddevice as sd
 import threading
 import soundfile as sf
 from datetime import datetime
-from signal import pause
-import SH1106
 import time
-import config
-import traceback
-import textwrap  # Import the textwrap module
-import time
-import subprocess
-import numpy  # Make sure NumPy is loaded before it is used in the callback
-assert numpy  #
-import argparse
-import tempfile
+# import numpy  # Make sure NumPy is loaded before it is used in the callback
+# assert numpy  #
 import queue
 import sys
 import os
-from PIL import Image
-from PIL import ImageDraw
-from PIL import ImageFont
-import shutil
-
 import Display
 
 from ViewController import ViewController
@@ -30,26 +16,7 @@ from TitleView import TitleView
 from ControlView import ControlView
 from MicTestView import MicTestView
 
-from enum import Enum
-
-import Display
-
-from gpiozero import *   
-
-class EavesDropperState(Enum):
-    select = 0
-    connect = 1
-    running = 2
-
 # Constants
-SCREEN_WIDTH = 128
-SCREEN_HEIGHT = 64
-CHAR_WIDTH = 6
-
-DEF_WRAP_WIDTH = SCREEN_WIDTH // CHAR_WIDTH # Each char is 6 pixels wide (128/6 = 21 1/3)
-DEF_FONT = ImageFont.load_default()
-DEF_TEXT_COLOR = "WHITE"
-
 PENDRIVE_MOUNT_POINT = "/mnt/usb0"
 PENDRIVE_RECORDINGS_DIR = "/WAV"
 PENDRIVE_RECORDINGS_PATH = PENDRIVE_MOUNT_POINT + PENDRIVE_RECORDINGS_DIR
