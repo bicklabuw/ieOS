@@ -14,7 +14,7 @@ class ViewControllerTest(ViewController):
         self.prefix = prefix
         self.pop = pop
 
-        self.view = ViewTest(text="DVD")
+        self.view = ViewTest(text="I.E.")
         self.view.text = prefix + self.view.text
         self.present_view(self.view)
         

@@ -7,9 +7,8 @@ from typing import Optional, Tuple
 import Main
 
 from PIL import ImageDraw
-from Components import Component, RGBAColor, MultiLineTextComponent, TextAnchor, VerticalAnchor, HorizontalAnchor
+from Components import Component, MultiLineTextComponent, TextAnchor, VerticalAnchor, HorizontalAnchor
 from Components import LineComponent, CircleComponent, RectangleComponent
-from enum import Enum
 import math
 import time
 
@@ -18,12 +17,12 @@ class PongViewController(ViewController):
                  user_paddle_width: int = 3, user_paddle_height: int = 25, 
                  user_paddle_speed: float = 3, user_paddle_init_y: int = Display.SCREEN_HEIGHT // 2, 
                  cpu_paddle_dist_frome_edge: int = Display.SCREEN_WIDTH // 8, 
-                 cpu_paddle_width: int = 3, cpu_paddle_height: int = 20, 
-                 cpu_paddle_speed: float = 2, cpu_paddle_init_y: int = Display.SCREEN_HEIGHT // 2,
+                 cpu_paddle_width: int = 3, cpu_paddle_height: int = 15, 
+                 cpu_paddle_speed: float = 1.5, cpu_paddle_init_y: int = Display.SCREEN_HEIGHT // 2,
                  ball_radius: int = 3, ball_init_speed: float = 1.5, 
                  ball_speed_multiplier_per_hit: float = 0.25, ball_speed_exponential: bool = False, 
                  ball_init_angle: Optional[float] = None, paddle_bounce_angle_range: float = 90, 
-                 min_ball_angle_from_paddle: float = 10, 
+                 min_ball_angle_from_paddle: float = 20, 
                  ball_init_x: Optional[int] = Display.SCREEN_WIDTH // 2,
                  ball_init_y: Optional[int] = Display.SCREEN_HEIGHT // 2):
         super().__init__()
@@ -204,26 +203,58 @@ class PongViewController(ViewController):
                 self.pong_view.set_paddle_y(move_user_paddle, 0)
             else:
                 self.pong_view.set_paddle_y(move_user_paddle, 
-                                            Display.SCREEN_HEIGHT - self.paddle_height)
+                                            Display.SCREEN_HEIGHT - paddle_height)
+    def r_to_d(self, rad: float) -> float:
+        return 180 * rad / math.pi
 
     def get_new_angle_on_collision(self, collision_with_user_paddle: bool) -> float:
         def_angle = (math.pi - self.ball_angle) % (2 * math.pi)
         
-        print("Def Angle: ", def_angle)
 
         paddle_y = self.pong_view.get_paddle_y(collision_with_user_paddle)
         paddle_height = (self.user_paddle_height if collision_with_user_paddle
                             else self.cpu_paddle_height)
         ball_y = self.pong_view.get_ball_coords()[1]
 
-        paddle_center = (paddle_y + paddle_height) / 2
-        mult_upwards_factor = ((ball_y - paddle_center) / 
+        paddle_center = paddle_y + paddle_height / 2
+        mult_upwards_factor = ((paddle_center - ball_y) / 
                                 (paddle_height / 2 + self.ball_radius))
         
         angle_change = (self.paddle_bounce_angle_range / 2) * mult_upwards_factor
         angle = def_angle + angle_change
-
-        if (angle - math.pi / 2) % math.pi < self.min_ball_angle_from_paddle:
+        
+        print("----------------ANGLE STUFF----------------")
+        print("Ball Angle: ", self.r_to_d(self.ball_angle))
+        print("Def Angle: ", self.r_to_d(def_angle))
+        
+        print()
+        
+        print("Paddle Height: ", paddle_height)
+        print("Paddle Divisor: ", (paddle_height / 2 + self.ball_radius))
+        print("Paddle Center: ", paddle_center)
+        print("Ball  Y: ", ball_y)
+        
+        print()
+        
+        print("Mult Upwards: ", mult_upwards_factor)
+        
+        print()
+        
+        print("Paddle Bounce Angle Range: ", self.paddle_bounce_angle_range)
+        print("Angle Change: ", self.r_to_d(angle_change))
+        print("Angle: ", self.r_to_d(angle))
+        
+        print()
+        
+        print("Angle from Paddle: ", self.r_to_d((angle - math.pi / 2) % math.pi))
+        print("Min Angle From Paddle: ", self.r_to_d(self.min_ball_angle_from_paddle))
+        print("Inner Condition: ", self.r_to_d(angle % (2 * math.pi))) 
+        
+        print()
+        
+        angle_from_paddle = (angle - math.pi / 2) % math.pi
+        if angle_from_paddle < self.min_ball_angle_from_paddle or \
+           math.pi - angle_from_paddle < self.min_ball_angle_from_paddle :
             if angle % (2 * math.pi) > math.pi:
                 if collision_with_user_paddle:
                     angle = 3 * math.pi / 2 + self.min_ball_angle_from_paddle
@@ -234,35 +265,56 @@ class PongViewController(ViewController):
                     angle = math.pi / 2 - self.min_ball_angle_from_paddle
                 else:
                     angle = math.pi / 2 + self.min_ball_angle_from_paddle
+                    
+        print("Final Angle: ", self.r_to_d(angle))
+        print("-------------------------------------------")
             
         return angle
         
 
     def on_appear(self):
+        self.prev_collided = False
         while True:
             if not self.game_over:
                 if not self.pause:
-                    self.ball_x += self.ball_speed * math.cos(self.ball_angle)
-                    self.ball_y += self.ball_speed * -math.sin(self.ball_angle)
+                    ball_change_x = self.ball_speed * math.cos(self.ball_angle)
+                    ball_change_y = self.ball_speed * -math.sin(self.ball_angle)
+                    
+                    self.ball_x += ball_change_x
+                    self.ball_y += ball_change_y
+                    
+                    if ball_change_x > 0:
+                        cpu_paddle_y = self.pong_view.get_paddle_y(False)
+                        cpu_mv_dir = int(round((self.ball_y - (cpu_paddle_y + self.cpu_paddle_height/2)) \
+                                               / self.cpu_paddle_speed))
+                        if cpu_mv_dir > 0:
+                            self.move_paddle(False, False)
+                        elif cpu_mv_dir < 0:
+                            self.move_paddle(False, True)
+                    
+                    if not self.prev_collided:
+                        if self.detect_ball_collision(detect_for_user_paddle=True):
+                            self.prev_collided = True
+                            if self.ball_speed_exponential:
+                                self.ball_speed *= self.ball_speed_multiplier_per_hit
+                            else:
+                                self.ball_speed += self.ball_speed_multiplier_per_hit
+                            self.ball_angle = self.get_new_angle_on_collision(collision_with_user_paddle=True)
+                            print("Ball Angle: ", self.ball_angle)
+                            self.ball_x = (self.user_paddle_dist_from_edge + self.user_paddle_width + 
+                                                    self.ball_radius)
+                            self._score += 1
+                            self.pong_view.set_score(self._score)
 
-                    if self.detect_ball_collision(detect_for_user_paddle=True):
-                        if self.ball_speed_exponential:
-                            self.ball_speed *= self.ball_speed_multiplier_per_hit
-                        else:
-                            self.ball_speed += self.ball_speed_multiplier_per_hit
-                        self.ball_angle = self.get_new_angle_on_collision(collision_with_user_paddle=True)
-                        print("Ball Angle: ", self.ball_angle)
-                        self.ball_x = (self.user_paddle_dist_from_edge + self.user_paddle_width + 
-                                                self.ball_radius)
-                        self._score += 1
-                        self.pong_view.set_score(self._score)
-
-                    if self.detect_ball_collision(detect_for_user_paddle=False):
-                        self.ball_angle = self.get_new_angle_on_collision(collision_with_user_paddle=False)
-                        print("Ball Angle: ", self.ball_angle)
-                        self.ball_x = (Display.SCREEN_WIDTH - 
-                                       self.cpu_paddle_dist_from_edge - 
-                                       self.cpu_paddle_width - self.ball_radius)
+                        if self.detect_ball_collision(detect_for_user_paddle=False):
+                            self.prev_collided = True
+                            self.ball_angle = self.get_new_angle_on_collision(collision_with_user_paddle=False)
+                            print("Ball Angle: ", self.ball_angle)
+                            self.ball_x = (Display.SCREEN_WIDTH - 
+                                           self.cpu_paddle_dist_from_edge - 
+                                           self.cpu_paddle_width - self.ball_radius)
+                    else:
+                        self.prev_collided = False
                         
                     if self.ball_y <= self.ball_radius:
                         self.ball_y = self.ball_radius
@@ -452,13 +504,14 @@ class PongView(View):
 # NOTE: FOR ALL VIEWS ____ FONT SIZE ____ has been disabled. Requires loading in a different font.
 class PongTextView(View):
     def __init__(self, title_text: str = "PONG", title_font_size: int = 24, 
-                 desc_text: str = "Press any key to start", desc_font_size: int = 16,
+                 desc_text: str = "Press a key to start", desc_font_size: int = 16,
                  divider: bool = True, divider_width: int = Display.SCREEN_WIDTH, 
                  divider_height: int = 1):
         super().__init__()
         self.title = MultiLineTextComponent(Display.SCREEN_WIDTH // 2, Display.SCREEN_HEIGHT // 3,
                                             text=title_text, anchor=TextAnchor(VerticalAnchor.MIDDLE, 
                                             HorizontalAnchor.MIDDLE))
+        
         self.start_text = MultiLineTextComponent(Display.SCREEN_WIDTH // 2, 
                                                  2 * Display.SCREEN_HEIGHT // 3,
                                                  text=desc_text, anchor=TextAnchor(VerticalAnchor.MIDDLE, 
@@ -480,7 +533,7 @@ class GameOverView(PongTextView):
                  score_y_space_above: int = 4, score_font_size: int = 16, divider: bool = True,  
                  divider_width: int = Display.SCREEN_WIDTH, divider_height: int = 1):
         super().__init__(title_text="You Win!" if user_won else "Game Over", 
-                         title_font_size=title_font_size, desc_text="Press any key to restart", 
+                         title_font_size=title_font_size, desc_text="Press any key\nto restart", 
                          desc_font_size=desc_font_size, divider=divider, 
                          divider_width=divider_width, divider_height=divider_height)
         

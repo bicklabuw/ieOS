@@ -118,49 +118,55 @@ More info on language codes here: https://www.iana.org/assignments/language-subt
 Note: Commented out methods include parameters that require newer version of Pillow (PIL)
 '''
 class MultiLineTextComponent(Component):
-#     def __init__(self, x: int, y: int, text: AnyStr, fill: Optional[RGBAColor] = None, 
-#                  font: Optional[ImageFont] = None,  anchor: Optional[TextAnchor] = None, 
-#                  spacing: float = 4, align: TextAllignment = TextAllignment.LEFT, 
-#                  direction: Optional[TextDirection] = None, features: Optional[List[str]] = None, 
-#                  language: Optional[str] = None, stroke_width: float = 0, 
-#                  stroke_fill: Optional[RGBAColor] = None, embedded_color: bool = False, 
-#                  font_size: Optional[float] = None):
-#         super().__init__(x=x, y=y, text=text, fill=fill, font=font,  anchor=anchor, spacing=spacing, 
-#                          align=align, direction=direction, features=features, language=language, 
-#                          stroke_width=stroke_width, stroke_fill=stroke_fill, 
-#                          embedded_color=embedded_color, font_size=font_size)
     def __init__(self, x: int, y: int, text: AnyStr, fill: Optional[RGBAColor] = None, 
                  font: Optional[ImageFont] = None,  anchor: Optional[TextAnchor] = None, 
                  spacing: float = 4, align: TextAllignment = TextAllignment.LEFT, 
-                 direction: Optional[TextDirection] = None, features: Optional[List[str]] = None):
+                 direction: Optional[TextDirection] = None, features: Optional[List[str]] = None, 
+                 language: Optional[str] = None, stroke_width: float = 0, 
+                 stroke_fill: Optional[RGBAColor] = None, embedded_color: bool = False, 
+                 font_size: Optional[float] = None):
         super().__init__(x=x, y=y, text=text, fill=fill, font=font,  anchor=anchor, spacing=spacing, 
-                         align=align, direction=direction, features=features)
+                         align=align, direction=direction, features=features, language=language, 
+                         stroke_width=stroke_width, stroke_fill=stroke_fill, 
+                         embedded_color=embedded_color, font_size=font_size)
+    # ~ def __init__(self, x: int, y: int, text: AnyStr, fill: Optional[RGBAColor] = None, 
+                 # ~ font: Optional[ImageFont] = None,  anchor: Optional[TextAnchor] = None, 
+                 # ~ spacing: float = 4, align: TextAllignment = TextAllignment.LEFT, 
+                 # ~ direction: Optional[TextDirection] = None, features: Optional[List[str]] = None):
+        # ~ super().__init__(x=x, y=y, text=text, fill=fill, font=font,  anchor=anchor, spacing=spacing, 
+                         # ~ align=align, direction=direction, features=features)
         
-#     def draw(self, draw: ImageDraw):
-#         draw.multiline_text((self.x, self.y), self.text, 
-#                             fill=None if self.fill is None else self.fill.to_tuple(),
-#                             font=self.font, 
-#                             anchor=None if self.anchor is None else self.anchor.to_PIL_str(), 
-#                             spacing=self.spacing, align=self.align.value, 
-#                             direction=None if self.direction is None else self.direction.value,
-#                             features=self.features, language=self.language, 
-#                             stroke_width=self.stroke_width,
-#                             stroke_fill=None if self.stroke_fill is None else self.stroke_fill.to_tuple(),
-#                             embedded_color=self.embedded_color, font_size=self.font_size)
     def draw(self, draw: ImageDraw):
-        print(self.anchor.to_PIL_str())
         draw.multiline_text((self.x, self.y), self.text, 
                             fill=None if self.fill is None else self.fill.to_tuple(),
                             font=self.font, 
                             anchor=None if self.anchor is None else self.anchor.to_PIL_str(), 
                             spacing=self.spacing, align=self.align.value, 
                             direction=None if self.direction is None else self.direction.value,
-                            features=self.features)
+                            features=self.features, language=self.language, 
+                            stroke_width=self.stroke_width,
+                            stroke_fill=None if self.stroke_fill is None else self.stroke_fill.to_tuple(),
+                            embedded_color=self.embedded_color, font_size=self.font_size)
+    # def draw(self, draw: ImageDraw):
+        # draw.multiline_text((self.x, self.y), self.text, 
+                            # fill=None if self.fill is None else self.fill.to_tuple(),
+                            # font=self.font, 
+                            # anchor=None if self.anchor is None else self.anchor.to_PIL_str(), 
+                            # spacing=self.spacing, align=self.align.value, 
+                            # direction=None if self.direction is None else self.direction.value,
+                            # features=self.features)
         
     def get_text_size(self, draw: ImageDraw = Display.DEF_DRAW) -> Tuple[int, int]:
-        return draw.textsize(self.text, font=self.font, spacing=self.spacing,
-                             direction=None if self.direction is None else self.direction.value,
-                             features=self.features)
+        left, top, right, bottom = draw.multiline_textbbox((self.x, self.y), self.text, font=self.font,
+                                                            anchor=None if self.anchor is None else self.anchor.to_PIL_str(), 
+                                                            spacing=self.spacing, align=self.align.value, 
+                                                            direction=None if self.direction is None else self.direction.value,
+                                                            features=self.features, language=self.language, 
+                                                            stroke_width=self.stroke_width,
+                                                            embedded_color=self.embedded_color)#,
+                                                            #font_size=self.font_size)
+                             
+        return (right - left, top - bottom)
     
 class CircleComponent(Component):
     def __init__(self, x: int, y: int, radius: int, fill: Optional[RGBAColor] = None, 
