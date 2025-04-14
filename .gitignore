@@ -1,0 +1,20 @@
+# byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# virtual environments
+venv/
+ENV/
+env/
+.venv/
+.ENV/
+.env/
+
+# pipenv
+Pipfile.lock
+
+# pyenv
+.python-version
+
+.vscode/
