@@ -12,6 +12,8 @@ from Components import LineComponent, CircleComponent, RectangleComponent
 import math
 import time
 
+from MathUtils import rad_to_deg
+
 class PongViewController(ViewController):
     def __init__(self, user_paddle_dist_from_edge: int = Display.SCREEN_WIDTH // 8,
                  user_paddle_width: int = 3, user_paddle_height: int = 25, 
@@ -204,8 +206,6 @@ class PongViewController(ViewController):
             else:
                 self.pong_view.set_paddle_y(move_user_paddle, 
                                             Display.SCREEN_HEIGHT - paddle_height)
-    def r_to_d(self, rad: float) -> float:
-        return 180 * rad / math.pi
 
     def get_new_angle_on_collision(self, collision_with_user_paddle: bool) -> float:
         def_angle = (math.pi - self.ball_angle) % (2 * math.pi)
@@ -224,8 +224,8 @@ class PongViewController(ViewController):
         angle = def_angle + angle_change
         
         print("----------------ANGLE STUFF----------------")
-        print("Ball Angle: ", self.r_to_d(self.ball_angle))
-        print("Def Angle: ", self.r_to_d(def_angle))
+        print("Ball Angle: ", rad_to_deg(self.ball_angle))
+        print("Def Angle: ", rad_to_deg(def_angle))
         
         print()
         
@@ -241,14 +241,14 @@ class PongViewController(ViewController):
         print()
         
         print("Paddle Bounce Angle Range: ", self.paddle_bounce_angle_range)
-        print("Angle Change: ", self.r_to_d(angle_change))
-        print("Angle: ", self.r_to_d(angle))
+        print("Angle Change: ", rad_to_deg(angle_change))
+        print("Angle: ", rad_to_deg(angle))
         
         print()
         
-        print("Angle from Paddle: ", self.r_to_d((angle - math.pi / 2) % math.pi))
-        print("Min Angle From Paddle: ", self.r_to_d(self.min_ball_angle_from_paddle))
-        print("Inner Condition: ", self.r_to_d(angle % (2 * math.pi))) 
+        print("Angle from Paddle: ", rad_to_deg((angle - math.pi / 2) % math.pi))
+        print("Min Angle From Paddle: ", rad_to_deg(self.min_ball_angle_from_paddle))
+        print("Inner Condition: ", rad_to_deg(angle % (2 * math.pi))) 
         
         print()
         
@@ -266,7 +266,7 @@ class PongViewController(ViewController):
                 else:
                     angle = math.pi / 2 + self.min_ball_angle_from_paddle
                     
-        print("Final Angle: ", self.r_to_d(angle))
+        print("Final Angle: ", rad_to_deg(angle))
         print("-------------------------------------------")
             
         return angle

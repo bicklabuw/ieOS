@@ -14,7 +14,7 @@ from ViewController import ViewController
 
 from TitleView import TitleView
 from ControlView import ControlView
-from MicTestView import MicTestView
+from MicTestViewController import MicTestView
 
 # Constants
 PENDRIVE_MOUNT_POINT = "/mnt/usb0"

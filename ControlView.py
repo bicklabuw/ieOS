@@ -11,6 +11,11 @@ from View import View
 import Display
 import math
 
+from Components import MultiLineTextComponent, PolygonComponent, Component, RGBAColor
+from typing import Optional
+
+from MathUtils import deg_to_rad
+
 class JoystickInput(Enum):
     '''
     This class is an :class:`Enum` that represents where a Joystick input / direction (UP, DOWN, LEFT, RIGHT, BUTTON)
@@ -46,6 +51,68 @@ DEF_JOY_ORDER: List[JoystickInput] = [JoystickInput.UP,
                               JoystickInput.BUTTON, 
                               JoystickInput.RIGHT,
                               JoystickInput.DOWN]
+
+class ArrowComponent(Component):
+    def __init__(self, x: float, y: float, width: float, height: float, rotation: float,
+                 fill: Optional[RGBAColor] = None, outline: Optional[RGBAColor] = None, 
+                 line_width: int = 1):
+        super.__init__(x=x, y=y, width=width, height=height, fill=fill, outline=outline, 
+                       line_width=line_width)
+        
+    def draw(self, draw: ImageDraw):
+        icon_height = self.LINE_HEIGHT
+        icon_width = self.CHAR_WIDTH - 1 # Leave a pixel space before text
+        
+        arrow_size = min(icon_height, icon_width) + 2
+        arrow_top = math.ceil((icon_height - arrow_size) / 2)
+        arrow_left = (icon_width - arrow_size) // 2 - 1
+        arrow_bottom = arrow_size + arrow_top
+        arrow_right = arrow_size + arrow_left
+        arrow_mid_x = arrow_left + (arrow_size // 2)
+        arrow_mid_y = arrow_top + (arrow_size // 2)
+
+        half_width = self.width / 2
+        half_height = self.height / 2
+
+        arrow_point_coord = (self.x + half_width * math.sin(deg_to_rad(self.rotation)), 
+                             self.y / 2 + half_height * math.cos(deg_to_rad(self.rotation)))
+        arrow_top_coord = (half_width * -math.sin(deg_to_rad(self.rotation)), 
+                           self.height * -math.cos(deg_to_rad(self.rotation)))
+        arrow_bottom_coord = ()
+
+        circle_size = min(icon_height, icon_width) + 1
+        circle_top = math.ceil((icon_height - circle_size) / 2)
+        circle_left = (icon_width - circle_size) // 2
+        circle_bottom = circle_top + circle_size
+        circle_right = circle_left + circle_size
+
+        arrow_coords = [(arrow_left,arrow_bottom + coord[1]),(arrow_right,arrow_bottom + coord[1]),(arrow_mid_x,arrow_top + coord[1])]
+
+
+
+
+class JoystickComponent(Component):
+    '''
+    This class is a :class:`Component` that represents a Joystick Input. It is used to display the Joystick Input
+    and its help text on the screen.
+    '''
+    def __init__(self, text: str, input: JoystickInput, x: int, y: int, arrow_text_spacing: int, font: ImageFont = View.DEF_FONT):
+        '''
+        Initializes a JoystickComponent object
+
+        :param text: The help text for the Joystick Input
+        :type text: str
+        :param input: The Joystick Input this component represents
+        :type input: class:`JoystickInput`
+        :param x: The x coordinate of the component
+        :type x: int
+        :param y: The y coordinate of the component
+        :type y: int
+        :param font: The font to use for the text, defaults to View.DEF_FONT
+        :type font: class:`PIL.ImageFont`, optional
+        '''
+        super().__init__(text, x, y, arrow_text_spacing, font)
+        self.input = input
 
 class ControlView(View):
     def __init__(self, uses_keys_inp: bool = True, uses_joy_inp: bool = True,
@@ -142,6 +209,8 @@ class ControlView(View):
 
         self.JOY_ORDER = JOY_ORDER
 
+        self.JOY_COMPONENTS: List[MultiLineTextComponent] = []
+
         for input in DEF_JOY_ORDER:
             if input not in self.JOY_ORDER:
                 self.JOY_ORDER.append(input)
@@ -156,9 +225,10 @@ class ControlView(View):
         :type text: str
         
         :return: The height of the string in pixels
-        :rtype: int
+        :rtype: float
         '''
-        return (text.count('\n') + 1) * self.LINE_HEIGHT
+        _, text_height = MultiLineTextComponent.get_text_size_of(text, spacing=self.LINE_SPACING)
+        return text_height #(text.count('\n') + 1) * self.LINE_HEIGHT
     
     def _get_text_width(self, text: str) -> int:
         '''
@@ -168,15 +238,29 @@ class ControlView(View):
         :type text: str
         
         :return: The width of the string in pixels
-        :rtype: int
+        :rtype: float
         '''
-        max_line_len = 0
+        # max_line_len = 0
         
-        for line in text.split('\n'):
-            if len(line) > max_line_len:
-                max_line_len = len(line)
+        # for line in text.split('\n'):
+        #     if len(line) > max_line_len:
+        #         max_line_len = len(line)
+
+        text_width, _ = MultiLineTextComponent.get_text_size_of(text, spacing=self.LINE_SPACING)
         
-        return max_line_len * self.CHAR_WIDTH
+        return text_width#max_line_len * self.CHAR_WIDTH
+    
+    def _get_text_size(self, text: str):
+        '''
+        Gets the size of the text Pixels as a tuple (width, height)
+        
+        :param text: The text to get the width of
+        :type text: str
+        
+        :return: The size of the string in pixels as a tuple (width, height)
+        :rtype: Tuple[float, float]'''
+
+        return MultiLineTextComponent.get_text_size_of(text, spacing=self.LINE_SPACING)
 
     def __get_key_text_coords_and_text(self):
         '''
@@ -301,11 +385,9 @@ class ControlView(View):
             text = "\n".join([textwrap.fill(line, width=self.MAX_JOY_CHARS+1) for line in text.split('\n')])
 
             # Get the height and add it to the total height
-            height: int = self._get_text_height(text)
+             # Get the width and make it the max width if it is
+            height, width = self._get_text_size(text)
             total_height += height
-
-            # Get the width and make it the max width if it is
-            width: int = self._get_text_width(text)
             max_width = width if width > max_width else max_width
 
             # Add the text to joy_texts and add the size to size_coords
@@ -533,9 +615,11 @@ class ControlView(View):
             max_width = end_x - start_x
             wrap_len = max_width // self.CHAR_WIDTH
             
+            wrapped_text_width, wrapped_text_height = self._get_text_size(wrapped_text)
+
             wrapped_text = "\n".join([textwrap.fill(line, width=wrap_len) for line in self.view_text.split('\n')])
-            view_x = start_x + ((max_width - self._get_text_width(wrapped_text)) // 2)
-            view_y = (self.SCREEN_HEIGHT - self._get_text_height(wrapped_text)) // 2
+            view_x = start_x + ((max_width - wrapped_text_width) // 2)
+            view_y = (self.SCREEN_HEIGHT - wrapped_text_height) // 2
             coord = (view_x, view_y)
             
             draw.multiline_text(coord, wrapped_text, font=self.view_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)

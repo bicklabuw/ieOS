@@ -108,6 +108,50 @@ class RGBAColor:
     
     def to_tuple(self):
         return (self.r, self.g, self.b, self.a)
+    
+class LineJointType(Enum):
+    CURVE = "curve"
+    STRAIGHT = None
+    
+class CoordinateComponent(Component, ABC):
+    def __init__(self, x: float, y: float, **kwargs):
+        super().__init__(x=x, y=y, **kwargs)
+
+    def get_coordinate(self) -> Tuple[float, float]:
+        return self.x, self.y
+    
+    def set_coordinate(self, x: float, y: float):
+        self.x = x
+        self.y = y
+
+class RectangleCoordinateComponent(CoordinateComponent, ABC):
+    def __init__(self, x: float, y: float, width: float, height: float, **kwargs):
+        super().__init__(x=x, y=y, width=width, height=height, **kwargs)
+
+    def get_rect(self) -> Tuple[float, float, float, float]:
+        return self.x, self.y, self.width, self.height
+    
+    def set_rect(self, x: float, y: float, width: float, height: float):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    
+    def get_rect_coords(self) -> Tuple[float, float, float, float]:
+        return self.x, self.y, self.x + self.width, self.y + self.height
+    
+
+class RadiusComponent(CoordinateComponent, ABC):
+    def __init__(self, x: float, y: float, radius: float, **kwargs):
+        super().__init__(x=x, y=y, radius=radius, **kwargs)
+    
+    def get_radius_dimensions(self) -> Tuple[float, float, float]:
+        return self.x, self.y, self.radius
+    
+    def set_radius_dimensions(self, x: float, y: float, radius: float):
+        self.x = x
+        self.y = y
+        self.radius = radius
 '''
 More info generally here: https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html#PIL.ImageDraw.ImageDraw.multiline_text
 
@@ -117,8 +161,8 @@ More info on language codes here: https://www.iana.org/assignments/language-subt
 
 Note: Commented out methods include parameters that require newer version of Pillow (PIL)
 '''
-class MultiLineTextComponent(Component):
-    def __init__(self, x: int, y: int, text: AnyStr, fill: Optional[RGBAColor] = None, 
+class TextComponent(CoordinateComponent):
+    def __init__(self, x: float, y: float, text: AnyStr, fill: Optional[RGBAColor] = None, 
                  font: Optional[ImageFont] = None,  anchor: Optional[TextAnchor] = None, 
                  spacing: float = 4, align: TextAllignment = TextAllignment.LEFT, 
                  direction: Optional[TextDirection] = None, features: Optional[List[str]] = None, 
@@ -129,7 +173,78 @@ class MultiLineTextComponent(Component):
                          align=align, direction=direction, features=features, language=language, 
                          stroke_width=stroke_width, stroke_fill=stroke_fill, 
                          embedded_color=embedded_color, font_size=font_size)
-    # ~ def __init__(self, x: int, y: int, text: AnyStr, fill: Optional[RGBAColor] = None, 
+    # ~ def __init__(self, x: float, y: float, text: AnyStr, fill: Optional[RGBAColor] = None, 
+                 # ~ font: Optional[ImageFont] = None,  anchor: Optional[TextAnchor] = None, 
+                 # ~ spacing: float = 4, align: TextAllignment = TextAllignment.LEFT, 
+                 # ~ direction: Optional[TextDirection] = None, features: Optional[List[str]] = None):
+        # ~ super().__init__(x=x, y=y, text=text, fill=fill, font=font,  anchor=anchor, spacing=spacing, 
+                         # ~ align=align, direction=direction, features=features)
+        
+    def draw(self, draw: ImageDraw):
+        draw.text((self.x, self.y), self.text, 
+                            fill=None if self.fill is None else self.fill.to_tuple(),
+                            font=self.font, 
+                            anchor=None if self.anchor is None else self.anchor.to_PIL_str(), 
+                            spacing=self.spacing, align=self.align.value, 
+                            direction=None if self.direction is None else self.direction.value,
+                            features=self.features, language=self.language, 
+                            stroke_width=self.stroke_width,
+                            stroke_fill=None if self.stroke_fill is None else self.stroke_fill.to_tuple(),
+                            embedded_color=self.embedded_color, font_size=self.font_size)
+    # def draw(self, draw: ImageDraw):
+        # draw.text((self.x, self.y), self.text, 
+                            # fill=None if self.fill is None else self.fill.to_tuple(),
+                            # font=self.font, 
+                            # anchor=None if self.anchor is None else self.anchor.to_PIL_str(), 
+                            # spacing=self.spacing, align=self.align.value, 
+                            # direction=None if self.direction is None else self.direction.value,
+                            # features=self.features)
+        
+    def get_text_size(self, draw: ImageDraw = Display.DEF_DRAW) -> Tuple[float, float]:
+        left, top, right, bottom = draw.textbbox((self.x, self.y), self.text, font=self.font,
+                                                            anchor=None if self.anchor is None else self.anchor.to_PIL_str(), 
+                                                            spacing=self.spacing, align=self.align.value, 
+                                                            direction=None if self.direction is None else self.direction.value,
+                                                            features=self.features, language=self.language, 
+                                                            stroke_width=self.stroke_width,
+                                                            embedded_color=self.embedded_color)#,
+                                                            #font_size=self.font_size)
+                             
+        return (right - left, top - bottom)
+    
+    @staticmethod
+    def get_text_size_of(text: AnyStr, draw: ImageDraw = Display.DEF_DRAW, 
+                         x: float = 0, y: float = 0, font: Optional[ImageFont] = None, 
+                         anchor: Optional[TextAnchor] = None, spacing: float = 4, 
+                         align: TextAllignment = TextAllignment.LEFT, 
+                         direction: Optional[TextDirection] = None, 
+                         features: Optional[List[str]] = None, 
+                         language: Optional[str] = None, stroke_width: float = 0,
+                         embedded_color: bool = False
+                         ) -> Tuple[float, float]:
+        left, top, right, bottom = draw.textbbox((x, y), text, font=font,
+                                                            anchor=None if anchor is None else anchor.to_PIL_str(), 
+                                                            spacing=spacing, align=align.value, 
+                                                            direction=None if direction is None else direction.value,
+                                                            features=features, language=language, 
+                                                            stroke_width=stroke_width,
+                                                            embedded_color=embedded_color)
+        
+        return (right - left, top - bottom)
+
+class MultiLineTextComponent(CoordinateComponent):
+    def __init__(self, x: float, y: float, text: AnyStr, fill: Optional[RGBAColor] = None, 
+                 font: Optional[ImageFont] = None,  anchor: Optional[TextAnchor] = None, 
+                 spacing: float = 4, align: TextAllignment = TextAllignment.LEFT, 
+                 direction: Optional[TextDirection] = None, features: Optional[List[str]] = None, 
+                 language: Optional[str] = None, stroke_width: float = 0, 
+                 stroke_fill: Optional[RGBAColor] = None, embedded_color: bool = False, 
+                 font_size: Optional[float] = None):
+        super().__init__(x=x, y=y, text=text, fill=fill, font=font,  anchor=anchor, spacing=spacing, 
+                         align=align, direction=direction, features=features, language=language, 
+                         stroke_width=stroke_width, stroke_fill=stroke_fill, 
+                         embedded_color=embedded_color, font_size=font_size)
+    # ~ def __init__(self, x: float, y: float, text: AnyStr, fill: Optional[RGBAColor] = None, 
                  # ~ font: Optional[ImageFont] = None,  anchor: Optional[TextAnchor] = None, 
                  # ~ spacing: float = 4, align: TextAllignment = TextAllignment.LEFT, 
                  # ~ direction: Optional[TextDirection] = None, features: Optional[List[str]] = None):
@@ -156,7 +271,7 @@ class MultiLineTextComponent(Component):
                             # direction=None if self.direction is None else self.direction.value,
                             # features=self.features)
         
-    def get_text_size(self, draw: ImageDraw = Display.DEF_DRAW) -> Tuple[int, int]:
+    def get_text_size(self, draw: ImageDraw = Display.DEF_DRAW) -> Tuple[float, float]:
         left, top, right, bottom = draw.multiline_textbbox((self.x, self.y), self.text, font=self.font,
                                                             anchor=None if self.anchor is None else self.anchor.to_PIL_str(), 
                                                             spacing=self.spacing, align=self.align.value, 
@@ -168,21 +283,39 @@ class MultiLineTextComponent(Component):
                              
         return (right - left, top - bottom)
     
-class CircleComponent(Component):
-    def __init__(self, x: int, y: int, radius: int, fill: Optional[RGBAColor] = None, 
+    @staticmethod
+    def get_text_size_of(text: AnyStr, draw: ImageDraw = Display.DEF_DRAW, 
+                         x: float = 0, y: float = 0, font: Optional[ImageFont] = None, 
+                         anchor: Optional[TextAnchor] = None, spacing: float = 4, 
+                         align: TextAllignment = TextAllignment.LEFT, 
+                         direction: Optional[TextDirection] = None, 
+                         features: Optional[List[str]] = None, 
+                         language: Optional[str] = None, stroke_width: float = 0,
+                         embedded_color: bool = False
+                         ) -> Tuple[float, float]:
+        left, top, right, bottom = draw.textbbox((x, y), text, font=font,
+                                                            anchor=None if anchor is None else anchor.to_PIL_str(), 
+                                                            spacing=spacing, align=align.value, 
+                                                            direction=None if direction is None else direction.value,
+                                                            features=features, language=language, 
+                                                            stroke_width=stroke_width,
+                                                            embedded_color=embedded_color)
+        
+        return (right - left, top - bottom)
+    
+class CircleComponent(RadiusComponent):
+    def __init__(self, x: float, y: float, radius: float, fill: Optional[RGBAColor] = None, 
                  outline: Optional[RGBAColor] = None, line_width: int = 1):
         super().__init__(x=x, y=y, radius=radius, fill=fill, outline=outline, line_width=line_width)
 
     def draw(self, draw: ImageDraw):
-        draw.ellipse((self.x - self.radius, self.y - self.radius, 
-                      self.x + self.radius, self.y + self.radius),
-                      fill=self.fill.to_tuple() if self.fill else None,
+        draw.circle((self.x, self.y), self.radius, fill=self.fill.to_tuple() if self.fill else None,
                       outline=self.outline.to_tuple() if self.outline else None, 
                       width=self.line_width
                     )
 
-class EllipseComponent(Component):
-    def __init__(self, x: int, y: int, width: int, height: int, fill: Optional[RGBAColor] = None, 
+class EllipseComponent(RectangleCoordinateComponent):
+    def __init__(self, x: float, y: float, width: float, height: float, fill: Optional[RGBAColor] = None, 
                  outline: Optional[RGBAColor] = None, line_width: int = 1):
         super().__init__(x=x, y=y, width=width, height=height, fill=fill, outline=outline, 
                          line_width=line_width)
@@ -194,8 +327,8 @@ class EllipseComponent(Component):
                      width=self.line_width
                     )
 
-class RectangleComponent(Component):
-    def __init__(self, x: int, y: int, width: int, height: int, fill: Optional[RGBAColor] = None, 
+class RectangleComponent(RectangleCoordinateComponent):
+    def __init__(self, x: float, y: float, width: float, height: float, fill: Optional[RGBAColor] = None, 
                  outline: Optional[RGBAColor] = None, line_width: int = 1):
         super().__init__(x=x, y=y, width=width, height=height, fill=fill, outline=outline, 
                          line_width=line_width)
@@ -206,30 +339,108 @@ class RectangleComponent(Component):
                        outline=self.outline.to_tuple() if self.outline else None, 
                        width=self.line_width
                       )
-
-# Rounded Rectangles (draw.rounded_rectangle) require Newer Pillow (PIL) Version
-# class RoundedRectangleComponent(Component):
-#     def __init__(self, x: int, y: int, width: int, height: int, radius: int = 0, 
-#                  fill: Optional[RGBAColor] = None, outline: Optional[RGBAColor] = None, 
-#                  line_width: int = 1, corners: Optional[tuple[bool, bool, bool, bool]] = None):
-#         super().__init__(x=x, y=y, width=width, height=height, radius=radius, fill=fill, 
-#                          outline=outline, line_width=line_width, corners=corners)
+class RoundedRectangleComponent(Component):
+    def __init__(self, x: float, y: float, width: float, height: float, radius: float = 0, 
+                 fill: Optional[RGBAColor] = None, outline: Optional[RGBAColor] = None, 
+                 line_width: int = 1, corners: Optional[tuple[bool, bool, bool, bool]] = None):
+        super().__init__(x=x, y=y, width=width, height=height, radius=radius, fill=fill, 
+                         outline=outline, line_width=line_width, corners=corners)
         
-#     def draw(self, draw: ImageDraw):
-#         draw.rounded_rectangle((self.x, self.y, self.x + self.width, self.y + self.height), 
-#                                radius=self.radius,
-#                                fill=self.fill.to_tuple() if self.fill else None,
-#                                outline=self.outline.to_tuple() if self.outline else None, 
-#                                line_width=self.line_width,
-#                                corners=self.corners
-#                               )
+    def draw(self, draw: ImageDraw):
+        draw.rounded_rectangle((self.x, self.y, self.x + self.width, self.y + self.height), 
+                               radius=self.radius,
+                               fill=self.fill.to_tuple() if self.fill else None,
+                               outline=self.outline.to_tuple() if self.outline else None, 
+                               line_width=self.line_width,
+                               corners=self.corners
+                              )
 
-class LineJointType(Enum):
-    CURVE = "curve"
-    STRAIGHT = None
+class PolygonComponent(Component):
+    def __init__(self, xys: List[Tuple[float, float]], fill: Optional[RGBAColor] = None, 
+                 outline: Optional[RGBAColor] = None, line_width: int = 1):
+        super().__init__(xys=xys, fill=fill, outline=outline, line_width=line_width)
+
+    def draw(self, draw: ImageDraw):
+        draw.polygon(self.xys, 
+                     fill=self.fill.to_tuple() if self.fill else None,
+                     outline=self.outline.to_tuple() if self.outline else None, 
+                     width=self.line_width
+                    )
+        
+class RegularPolygonComponent(RadiusComponent):
+    def __init__(self, x: float, y: float, radius: float, sides: int, rotation: float = 0,
+                 fill: Optional[RGBAColor] = None, outline: Optional[RGBAColor] = None, 
+                 line_width: int = 1):
+        super().__init__(x=x, y=y, radius=radius, sides=sides, fill=fill, outline=outline, 
+                         line_width=line_width)
+        
+    def draw(self, draw: ImageDraw):
+        draw.polygon((self.x, self.y, self.radius), self.sides, self.rotation,
+                     fill=self.fill.to_tuple() if self.fill else None,
+                     outline=self.outline.to_tuple() if self.outline else None, 
+                     width=self.line_width
+                    )
+        
+class PointComponent(CoordinateComponent):
+    def __init__(self, x: float, y: float, fill: Optional[RGBAColor] = None):
+        super().__init__(x=x, y=y, fill=fill)
+
+    def draw(self, draw: ImageDraw):
+        draw.point((self.x, self.y), fill=self.fill.to_tuple() if self.fill else None)
+
+class ArcComponent(RectangleCoordinateComponent):
+    def __init__(self, x: float, y: float, width: float, height: float, start: float, end: float, 
+                 fill: Optional[RGBAColor] = None, line_width: int = 1):
+        super().__init__(x=x, y=y, width=width, height=height, start=start, end=end, fill=fill,
+                         line_width=line_width)
+        
+    def draw(self, draw: ImageDraw):
+        draw.arc((self.x, self.y, self.x + self.width, self.y + self.height), 
+                 start=self.start, end=self.end,
+                 fill=self.fill.to_tuple() if self.fill else None,
+                 width=self.line_width
+                )
+        
+class ChordComponent(RectangleCoordinateComponent):
+    def __init__(self, x: float, y: float, width: float, height: float, start: float, end: float, 
+                 fill: Optional[RGBAColor] = None, outline: Optional[RGBAColor] = None, 
+                 line_width: int = 1):
+        super().__init__(x=x, y=y, width=width, height=height, start=start, end=end, fill=fill,
+                         outline=outline, line_width=line_width)
+        
+    def draw(self, draw: ImageDraw):
+        draw.chord((self.x, self.y, self.x + self.width, self.y + self.height), 
+                   start=self.start, end=self.end,
+                   fill=self.fill.to_tuple() if self.fill else None,
+                   outline=self.outline.to_tuple() if self.outline else None, 
+                   width=self.line_width
+                  )
+
+class PieSliceComponent(RectangleCoordinateComponent):
+    def __init__(self, x: float, y: float, width: float, height: float, start: float, end: float, 
+                 fill: Optional[RGBAColor] = None, outline: Optional[RGBAColor] = None, 
+                 line_width: int = 1):
+        super().__init__(x=x, y=y, width=width, height=height, start=start, end=end, fill=fill,
+                         outline=outline, line_width=line_width)
+        
+    def draw(self, draw: ImageDraw):
+        draw.pieslice((self.x, self.y, self.x + self.width, self.y + self.height), 
+                      start=self.start, end=self.end,
+                      fill=self.fill.to_tuple() if self.fill else None,
+                      outline=self.outline.to_tuple() if self.outline else None, 
+                      width=self.line_width
+                     )
+        
+class BitMapComponent(Component):
+    def __init__(self, x: float, y: float, bitmap: Image.Image, fill: Optional[RGBAColor] = None):
+        super().__init__(x=x, y=y, bitmap=bitmap, fill=fill)
+
+    def draw(self, draw: ImageDraw):
+        draw.bitmap((self.x, self.y), self.bitmap,
+                    fill=self.fill.to_tuple() if self.fill else None)
 
 class LineComponent(Component):
-    def __init__(self, x1: int, y1: int, x2: int, y2: int, fill: Optional[RGBAColor] = None, 
+    def __init__(self, x1: float, y1: float, x2: float, y2: float, fill: Optional[RGBAColor] = None, 
                  width: int = 0, joint: LineJointType = LineJointType.STRAIGHT):
         super().__init__(x1=x1, y1=y1, x2=x2, y2=y2, fill=fill, width=width, joint=joint)
     

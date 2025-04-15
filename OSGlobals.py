@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ViewController import ViewController, ViewControllerTransition
 
-import Display
+OSVersion = "0.2.0.0.dev2"
 
 FRAME_TIME: float = 100 / 1000
 POLLING_SLEEP_TIME: float = 50 / 1000

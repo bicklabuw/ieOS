@@ -7,8 +7,8 @@ class View(ABC):
     def __init__(self):
         # Set General Default View Constants
         self.CHAR_LINE_SPACE = 1 # Added space to each line (built in space)
-        self.CHAR_WIDTH: int = 6 # No Space Between some chars - ONLY WORKS FOR DEFAULT FONT
-        self.CHAR_HEIGHT: int = 9 # ONLY WORKS FOR DEFAULT FONT
+        #self.CHAR_WIDTH: int = 6 # No Space Between some chars - ONLY WORKS FOR DEFAULT FONT
+        #self.CHAR_HEIGHT: int = 9 # ONLY WORKS FOR DEFAULT FONT
         self.LINE_HEIGHT: int = self.CHAR_HEIGHT + self.CHAR_LINE_SPACE
         self.LINE_SPACING: int = 1 # Space between lines
         self.TEXT_ALIGN: str = "center"
@@ -32,6 +32,10 @@ class View(ABC):
         # Add the component to the list
         self._components.append(component)
 
+    def add_components(self, components: List[Component]):
+        for component in components:
+            self.add_component(component)
+
     def remove_component(self, component: Component):
         if component not in self._components:
             raise ValueError("Component not found in the view")
@@ -39,12 +43,13 @@ class View(ABC):
         # Remove the component from the list
         self._components.remove(component)
 
+    def remove_components(self, components: List[Component]):
+        for component in components:
+            self.remove_component(component)
+
     def get_components(self) -> List[Component]:
         return self._components
     
     def clear_components(self):
         self._components.clear()
-    
-
-    
     
