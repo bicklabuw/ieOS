@@ -107,7 +107,7 @@ class MicTestView(ControlView):
         super().__init__(uses_keys_inp=False, right_text="Back")
         self._num_mics = len(mic_indices)
         self._mic_indices = mic_indices
-        self._components = [RectangleComponent(0,0,0,0) for _ in self._mic_indices]
+        self._mic_components = [RectangleComponent(0,0,0,0) for _ in self._mic_indices]
 
         self.CHAR_WIDTH, self.CHAR_HEIGHT = TextComponent.get_text_size_of("0", spacing=self.LINE_SPACING)
 
@@ -119,7 +119,7 @@ class MicTestView(ControlView):
         self.bar_id_space = bar_id_space # Vertical Space (in pixels) between the Audio Bar and the ID Text
 
         self.add_components(self._mic_name_components)
-        self.add_components(self._components)
+        self.add_components(self._mic_components)
         self.add_component(self._mic_tapped_component)
 
         # Draw controls on image and get the view's frame (x, width)
@@ -139,7 +139,7 @@ class MicTestView(ControlView):
         rect_y = self.SCREEN_HEIGHT - self.CHAR_HEIGHT - self.bar_id_space
         rect_max_height = rect_y - self.CHAR_HEIGHT
         rect_start_x = ((mic_index + 0.5) * self._width / self._num_mics) - (self.bar_width / 2) + self._start_x
-        self._components[mic_index].set_rect(rect_start_x, rect_y - int(amplitude*rect_max_height), rect_start_x + self.bar_width, rect_y)
+        self._mic_components[mic_index].set_rect(rect_start_x, rect_y - int(amplitude*rect_max_height), rect_start_x + self.bar_width, rect_y)
 
     def _draw_controls_and_get_frame(self):
         # Draw controls on image (and get our View's start and end x as well as width)

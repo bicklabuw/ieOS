@@ -303,6 +303,16 @@ class MultiLineTextComponent(CoordinateComponent):
         
         return (right - left, top - bottom)
     
+class LineComponent(Component):
+    def __init__(self, x1: float, y1: float, x2: float, y2: float, fill: Optional[RGBAColor] = None, 
+                 width: int = 0, joint: LineJointType = LineJointType.STRAIGHT):
+        super().__init__(x1=x1, y1=y1, x2=x2, y2=y2, fill=fill, width=width, joint=joint)
+    
+    def draw(self, draw: ImageDraw):
+        draw.line((self.x1, self.y1, self.x2, self.y2),
+                  fill=self.fill.to_tuple() if self.fill else None,
+                  width=self.width, joint=self.joint.value)
+    
 class CircleComponent(RadiusComponent):
     def __init__(self, x: float, y: float, radius: float, fill: Optional[RGBAColor] = None, 
                  outline: Optional[RGBAColor] = None, line_width: int = 1):
@@ -438,16 +448,6 @@ class BitMapComponent(Component):
     def draw(self, draw: ImageDraw):
         draw.bitmap((self.x, self.y), self.bitmap,
                     fill=self.fill.to_tuple() if self.fill else None)
-
-class LineComponent(Component):
-    def __init__(self, x1: float, y1: float, x2: float, y2: float, fill: Optional[RGBAColor] = None, 
-                 width: int = 0, joint: LineJointType = LineJointType.STRAIGHT):
-        super().__init__(x1=x1, y1=y1, x2=x2, y2=y2, fill=fill, width=width, joint=joint)
-    
-    def draw(self, draw: ImageDraw):
-        draw.line((self.x1, self.y1, self.x2, self.y2),
-                  fill=self.fill.to_tuple() if self.fill else None,
-                  width=self.width, joint=self.joint.value)
 
 if __name__ == "__main__":
     # Test MultiLineTextComponent

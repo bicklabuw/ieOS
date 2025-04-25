@@ -11,7 +11,8 @@ from View import View
 import Display
 import math
 
-from Components import MultiLineTextComponent, PolygonComponent, Component, RGBAColor
+from Components import MultiLineTextComponent, Component, RGBAColor, RectangleCoordinateComponent
+from Components import CircleComponent, TextAllignment, LineComponent
 from typing import Optional
 
 from MathUtils import deg_to_rad
@@ -52,58 +53,158 @@ DEF_JOY_ORDER: List[JoystickInput] = [JoystickInput.UP,
                               JoystickInput.RIGHT,
                               JoystickInput.DOWN]
 
-class ArrowComponent(Component):
+from collections import namedtuple
+
+Coordinate = namedtuple("Coordinate", ["x", "y"])
+
+class ArrowComponent(RectangleCoordinateComponent):
     def __init__(self, x: float, y: float, width: float, height: float, rotation: float,
                  fill: Optional[RGBAColor] = None, outline: Optional[RGBAColor] = None, 
                  line_width: int = 1):
-        super.__init__(x=x, y=y, width=width, height=height, fill=fill, outline=outline, 
-                       line_width=line_width)
+        super.__init__(x=x, y=y, width=width, height=height, rotation=rotation, fill=fill, 
+                       outline=outline, line_width=line_width)
         
     def draw(self, draw: ImageDraw):
-        icon_height = self.LINE_HEIGHT
-        icon_width = self.CHAR_WIDTH - 1 # Leave a pixel space before text
-        
-        arrow_size = min(icon_height, icon_width) + 2
-        arrow_top = math.ceil((icon_height - arrow_size) / 2)
-        arrow_left = (icon_width - arrow_size) // 2 - 1
-        arrow_bottom = arrow_size + arrow_top
-        arrow_right = arrow_size + arrow_left
-        arrow_mid_x = arrow_left + (arrow_size // 2)
-        arrow_mid_y = arrow_top + (arrow_size // 2)
+        # icon_height = self.LINE_HEIGHT
+        # icon_width = self.CHAR_WIDTH - 1 # Leave a pixel space before text
 
         half_width = self.width / 2
         half_height = self.height / 2
 
-        arrow_point_coord = (self.x + half_width * math.sin(deg_to_rad(self.rotation)), 
-                             self.y / 2 + half_height * math.cos(deg_to_rad(self.rotation)))
-        arrow_top_coord = (half_width * -math.sin(deg_to_rad(self.rotation)), 
-                           self.height * -math.cos(deg_to_rad(self.rotation)))
-        arrow_bottom_coord = ()
+        width_modifier = (half_height**2)/(4*half_width)
+        radius = half_width + width_modifier
+        centroid = Coordinate(self.x + half_width - width_modifier, self.y + half_height)
 
-        circle_size = min(icon_height, icon_width) + 1
-        circle_top = math.ceil((icon_height - circle_size) / 2)
-        circle_left = (icon_width - circle_size) // 2
-        circle_bottom = circle_top + circle_size
-        circle_right = circle_left + circle_size
+        # (half_width-z)**2 + half_height**2 == (half_width+z)**2
+        # hw**2-2*z*hw+z**2 + hh**2 == hw**2+2*z*hw+z**2
+        # -2*z*hw + hh**2 == 2*z*hw
+        # hh**2 == 4*z*hw
+        # hh**2/(4*hw) == z
+        left_points_init_angle = math.atan2(half_height, half_width-width_modifier)
 
-        arrow_coords = [(arrow_left,arrow_bottom + coord[1]),(arrow_right,arrow_bottom + coord[1]),(arrow_mid_x,arrow_top + coord[1])]
+        arrow_point_coord = (radius * math.cos(self.rotation) + centroid.x, 
+                             radius * math.sin(self.rotation) + centroid.y)
+        arrow_top_coord = (radius * math.cos(self.rotation + left_points_init_angle) + centroid.x, 
+                           radius * math.sin(self.rotation + left_points_init_angle) + centroid.y)
+        
+        arrow_bottom_coord = (radius * math.cos(self.rotation - left_points_init_angle) + centroid.x, 
+                           radius * math.sin(self.rotation - left_points_init_angle) + centroid.y)
+        
+        arrow_coords = [arrow_point_coord, arrow_top_coord, arrow_bottom_coord]
+
+        draw.polygon(arrow_coords, 
+                     fill=self.fill.to_tuple() if self.fill else None,
+                     outline=self.outline.to_tuple() if self.outline else None, 
+                     width=self.line_width
+                    )
+        
 
 
+        # arrow_size = min(icon_height, icon_width) + 2
+        # arrow_top = math.ceil((icon_height - arrow_size) / 2)
+        # arrow_left = (icon_width - arrow_size) // 2 - 1
+        # arrow_bottom = arrow_size + arrow_top
+        # arrow_right = arrow_size + arrow_left
+        # arrow_mid_x = arrow_left + (arrow_size // 2)
+        # arrow_mid_y = arrow_top + (arrow_size // 2)
+
+        # half_width = self.width / 2
+        # half_height = self.height / 2
+
+        # arrow_point_coord = (self.x + half_width * math.sin(deg_to_rad(self.rotation)), 
+        #                      self.y / 2 + half_height * math.cos(deg_to_rad(self.rotation)))
+        # arrow_top_coord = (half_width * -math.sin(deg_to_rad(self.rotation)), 
+        #                    self.height * -math.cos(deg_to_rad(self.rotation)))
+        # arrow_bottom_coord = ()
+
+        # circle_size = min(icon_height, icon_width) + 1
+        # circle_top = math.ceil((icon_height - circle_size) / 2)
+        # circle_left = (icon_width - circle_size) // 2
+        # circle_bottom = circle_top + circle_size
+        # circle_right = circle_left + circle_size
+
+        # arrow_coords = [(arrow_left,arrow_bottom + coord[1]),(arrow_right,arrow_bottom + coord[1]),(arrow_mid_x,arrow_top + coord[1])]
 
 
-class JoystickComponent(Component):
+class JoystickArrowComponent(RectangleCoordinateComponent):
+    def __init__(self, joy_input: JoystickInput, x: int, y: int, width: float, height: float):
+
+        self._joy_input = joy_input
+        self._arrow_component = ArrowComponent(x, y, width, height, self._get_rot(), fill=0, 
+                                               outline=255)
+        super().__init__(x, y, width, height)
+
+    def _get_rot(self):
+        if self._joy_input == JoystickInput.RIGHT:
+            return 0 
+        elif self._joy_input == JoystickInput.UP:
+            return math.pi / 2
+        elif self._joy_input == JoystickInput.LEFT:
+            return math.pi
+        elif self._joy_input == JoystickInput.DOWN:
+            return 3 * math.pi / 2
+        else:
+            raise ___
+        
+    @property
+    def x(self):
+        return self._arrow_component.x
+    
+    @x.setter
+    def x(self, x: int):
+        self._arrow_component.x = x
+
+    @property
+    def y(self):
+        return self._arrow_component.y
+    
+    @y.setter
+    def y(self, y: int):
+        self._arrow_component.y = y
+
+    @property
+    def width(self):
+        return self._arrow_component.width
+    
+    @width.setter
+    def width(self, width: int):
+        self._arrow_component.width = width
+
+    @property
+    def height(self):
+        return self._arrow_component.height
+    
+    @height.setter
+    def height(self, height: int):
+        self._arrow_component.height= height
+    
+    @property
+    def joy_input(self):
+        return self._joy_input
+    
+    @joy_input.setter
+    def joy_input(self, joy_input: JoystickInput):
+        self._joy_input = joy_input
+        self.rotation = self._get_rot()
+
+    def draw(self, draw: ImageDraw):
+        return super().draw(draw)
+
+class JoystickComponent(RectangleCoordinateComponent):
     '''
     This class is a :class:`Component` that represents a Joystick Input. It is used to display the Joystick Input
     and its help text on the screen.
     '''
-    def __init__(self, text: str, input: JoystickInput, x: int, y: int, arrow_text_spacing: int, font: ImageFont = View.DEF_FONT):
+    def __init__(self, text: str, joy_input: JoystickInput, x: int, y: int,
+                 arrow_text_spacing: int, arrow_width: float, arrow_height: float,
+                 font: ImageFont = View.DEF_FONT, font_size: float | None = None):
         '''
         Initializes a JoystickComponent object
 
         :param text: The help text for the Joystick Input
         :type text: str
-        :param input: The Joystick Input this component represents
-        :type input: class:`JoystickInput`
+        :param joy_input: The Joystick Input this component represents
+        :type joy_input: class:`JoystickInput`
         :param x: The x coordinate of the component
         :type x: int
         :param y: The y coordinate of the component
@@ -111,15 +212,139 @@ class JoystickComponent(Component):
         :param font: The font to use for the text, defaults to View.DEF_FONT
         :type font: class:`PIL.ImageFont`, optional
         '''
-        super().__init__(text, x, y, arrow_text_spacing, font)
-        self.input = input
+        super().__init__(text, x, y, arrow_text_spacing, arrow_width, arrow_height, font, 
+                         font_size)
+        self._text = MultiLineTextComponent(x+arrow_width+arrow_text_spacing, y, text, font=font, 
+                                            font_size=font_size, spacing=self.LINE_SPACING, 
+                                            align=TextAllignment.CENTER)
+        self._change_arrow_dir(joy_input)
+        self._joy_input = joy_input
+        
+    @property
+    def x(self):
+        return self._arrow_component.x
+    
+    @x.setter
+    def x(self, x: int):
+        self._arrow_component.x = x
+        self._text.x = x + self._arrow_component.width + self.arrow_text_spacing
+
+    def update_ys(self, y: int):
+        text_height = self._text.get_text_size()[1]
+        height_diff = self._arrow_component.height - text_height
+        self._arrow_component.y = y if height_diff > 0 else y - height_diff / 2 # - since height diff is negative
+        self._text.y = y if height_diff < 0 else y + height_diff / 2
+
+    @property
+    def y(self):
+        return min(self._text.y, self._arrow_component.y)
+    
+    @y.setter
+    def y(self, y: int):
+        self.y = y
+        self.update_ys(y)
+
+    @property
+    def joy_input(self):
+        return self._joy_input
+    
+    @joy_input.setter
+    def joy_input(self, joy_input: JoystickInput):
+        if self._joy_input != joy_input:
+            if self._joy_input == JoystickInput.BUTTON or joy_input == JoystickInput.BUTTON:
+                self._change_arrow_dir(joy_input)
+            else:
+                self._arrow_component.joy_input = self._joy_input
+            
+            self._joy_input = joy_input
+            self.set_changed_flag()
+            
+    def _change_arrow_dir(self, joy_input: JoystickInput):
+        _, height = self._text.get_text_size()
+        arrow_y_adj = (height - self.arrow_height) / 2
+        if joy_input == JoystickInput.BUTTON:
+            half_arrow_height = self.arrow_height / 2
+            self._arrow_component = CircleComponent(self.x + half_arrow_height, 
+                                                    self.y + arrow_y_adj + half_arrow_height, 
+                                                    self.arrow_height, fill=0, outline=255)
+        else:
+            self._arrow_component = JoystickArrowComponent(joy_input, self.x, self.y + arrow_y_adj, 
+                                                           self.arrow_width, self.arrow_height)
+
+
+    @property
+    def text(self):
+        return self._text.text
+
+    @text.setter
+    def text(self, text: str):
+        self._text.text = text
+
+    @property
+    def arrow_text_spacing(self):
+        return self._text.x - self.x - self._arrow_component.width
+    
+    @arrow_text_spacing.setter
+    def arrow_text_spacing(self, arrow_text_spacing: int):
+        self._text.x = self._arrow_component.x + self._arrow_component.width + arrow_text_spacing
+
+    @property
+    def arrow_width(self):
+        return self._arrow_component.width
+    
+    @arrow_width.setter
+    def arrow_width(self, arrow_width: float):
+        self._arrow_component.width = arrow_width
+        self._text.x = self._arrow_component.x + arrow_width + self.arrow_text_spacing
+    
+    @property
+    def arrow_height(self):
+        return self._arrow_component.height
+    
+    @arrow_height.setter
+    def arrow_height(self, arrow_height: float):
+        self._arrow_component.height = arrow_height
+        self.update_ys(self.y)
+
+    @property
+    def font(self):
+        return self._text.font
+    
+    @font.setter
+    def font(self, font: ImageFont):
+        self._text.font = font
+
+    @property
+    def font_size(self):
+        return self._text.font_size
+    
+    @font_size.setter
+    def font_size(self, font_size: float):
+        self._text.font_size = font_size
+
+     # TODO: Change View to have changed flag
+     # TODO: Change component to know what view(s) it's in
+     # TODO: Have view add to views list in component when component added to view (and removed when removed)
+     # TODO: Change Render to go off of if view was changed
+     # TODO: Have sub components
+     # TODO: Subcomponents have same view as super component
+    def draw(self, draw: ImageDraw):
+        self._arrow_component.draw(draw)
+        self._text.draw(draw)
 
 class ControlView(View):
+    def __init__(self):
+        super().__init__()
+
+        self.control_view_component = ControlComponent()
+        self.add_component(self.control_view_component)
+
+class ControlComponent(Component):
     def __init__(self, uses_keys_inp: bool = True, uses_joy_inp: bool = True,
                  max_key_chars: int = 5, max_joy_chars: int = 4, view_text = "",
                  up_text: str = "", down_text = "", left_text = "", right_text = "", button_text = "",
                  key1_text = "", key2_text = "", key3_text = "",
-                 cont_font: ImageFont = View.DEF_FONT, view_font: ImageFont = View.DEF_FONT,
+                 #cont_font: ImageFont = View.DEF_FONT, view_font: ImageFont = View.DEF_FONT,
                  sep_width: int = 3, sep_fill_width: int = 1, sep_fill_height: int = None,
                  JOY_ORDER: List[JoystickInput] = DEF_JOY_ORDER):
         """
@@ -179,41 +404,61 @@ class ControlView(View):
         :type JOY_ORDER: List[:class:`JoystickInput`]
         """
 
-        super().__init__()
+        super().__init__(uses_keys_inp, uses_keys_inp, max_key_chars, max_joy_chars, view_text,
+                         up_text, down_text, left_text, right_text, button_text,
+                         key1_text, key2_text, key3_text,
+                         sep_width, sep_fill_width, sep_fill_height)
         
         # Define Class Variables
-        self.key_controls_en = uses_keys_inp
-        self.joy_controls_en = uses_joy_inp
+        # self.key_controls_en = uses_keys_inp
+        # self.joy_controls_en = uses_joy_inp
         
-        self.MAX_KEY_CHARS = max_key_chars
-        self.MAX_JOY_CHARS = max_joy_chars
+        # self.MAX_KEY_CHARS = max_key_chars
+        # self.MAX_JOY_CHARS = max_joy_chars
         
-        self.view_text = view_text
+        # self.view_text = view_text
         
-        self.up_text = up_text
-        self.down_text = down_text
-        self.left_text = left_text
-        self.right_text = right_text
-        self.button_text = button_text
+        # self.up_text = up_text
+        # self.down_text = down_text
+        # self.left_text = left_text
+        # self.right_text = right_text
+        # self.button_text = button_text
         
-        self.key1_text = key1_text
-        self.key2_text = key2_text
-        self.key3_text = key3_text
+        # self.key1_text = key1_text
+        # self.key2_text = key2_text
+        # self.key3_text = key3_text
+
+        self.CHAR_WIDTH = MultiLineTextComponent.get_text_size_of("A", spacing=self.LINE_SPACING)
         
-        self.cont_font = self.DEF_FONT#cont_font
-        self.view_font = self.DEF_FONT#view_font
+        self.cont_font = Display.DEF_FONT#cont_font
+        self.view_font = Display.DEF_FONT#view_font
         
-        self.SEP_WIDTH = sep_width
-        self.SEP_FILL_WIDTH = sep_fill_width
-        self.SEP_FILL_HEIGHT = sep_fill_height if sep_fill_height is not None else self.SCREEN_HEIGHT
+        self.sep_width = sep_width
+        self.sep_fill_width = sep_fill_width
+        self.sep_fill_height = sep_fill_height if sep_fill_height is not None else self.SCREEN_HEIGHT
 
         self.JOY_ORDER = JOY_ORDER
 
         self.JOY_COMPONENTS: List[MultiLineTextComponent] = []
+        self.JOY_SEP_COMPONENT: LineComponent = LineComponent(0, 0, 0, self.SCREEN_HEIGHT, fill=0)
+
+        self.KEY_COMPONENTS: List[MultiLineTextComponent] = []
+        self.KEY_SEP_COMPONENT: LineComponent = LineComponent(self.SCREEN_WIDTH, self.SCREEN_WIDTH, 
+                                                              0, self.SCREEN_HEIGHT, fill=0)
 
         for input in DEF_JOY_ORDER:
             if input not in self.JOY_ORDER:
                 self.JOY_ORDER.append(input)
+
+        for input in self.JOY_ORDER:
+            component = JoystickComponent("", input, 0, 0, 0, 0, 0, 0,
+                                                        font=self.cont_font)
+            self.JOY_COMPONENTS.append(component)
+
+        for input in KeyInput:
+            component = MultiLineTextComponent(0, 0, "", font=self.cont_font, 
+                                               spacing=self.LINE_SPACING, align=TextAllignment.CENTER)
+            self.KEY_COMPONENTS.append(component)
     
     def _get_text_height(self, text: str) -> int:
         '''
@@ -465,88 +710,158 @@ class ControlView(View):
             icon_height = self.LINE_HEIGHT
             icon_width = self.CHAR_WIDTH - 1 # Leave a pixel space before text
             
-            arrow_size = min(icon_height, icon_width) + 2
-            arrow_top = math.ceil((icon_height - arrow_size) / 2)
-            arrow_left = (icon_width - arrow_size) // 2 - 1
-            arrow_bottom = arrow_size + arrow_top
-            arrow_right = arrow_size + arrow_left
-            arrow_mid_x = arrow_left + (arrow_size // 2)
-            arrow_mid_y = arrow_top + (arrow_size // 2)
+            #arrow_size = min(icon_height, icon_width) + 2
+            # arrow_top = math.ceil((icon_height - arrow_size) / 2)
+            # arrow_left = (icon_width - arrow_size) // 2 - 1
+            # arrow_bottom = arrow_size + arrow_top
+            # arrow_right = arrow_size + arrow_left
+            # arrow_mid_x = arrow_left + (arrow_size // 2)
+            # arrow_mid_y = arrow_top + (arrow_size // 2)
 
-            circle_size = min(icon_height, icon_width) + 1
-            circle_top = math.ceil((icon_height - circle_size) / 2)
-            circle_left = (icon_width - circle_size) // 2
-            circle_bottom = circle_top + circle_size
-            circle_right = circle_left + circle_size
+            # circle_size = min(icon_height, icon_width) + 1
+            # circle_top = math.ceil((icon_height - circle_size) / 2)
+            # circle_left = (icon_width - circle_size) // 2
+            # circle_bottom = circle_top + circle_size
+            # circle_right = circle_left + circle_size
 
             # Coordinates, Wrapped Text, and Max Width for the Joystick Help Text
             joy_coords, joy_text, joy_max_width = self.__get_joy_text_coords_and_text()
-            
-            # Draw up text if not empty
+
             if self.up_text != "":
                 coord = joy_coords[JoystickInput.UP]
                 text = joy_text[JoystickInput.UP]
+                component = self.JOY_COMPONENTS[JoystickInput.UP]
 
-                # Draw Arrow
-                arrow_coords = [(arrow_left,arrow_bottom + coord[1]),(arrow_right,arrow_bottom + coord[1]),(arrow_mid_x,arrow_top + coord[1])]
-                draw.polygon(arrow_coords, outline=255, fill=0)
-                
-                # Draw Text
-                draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
-            
-            # Draw left text if not empty
+                component.x = coord[0]
+                component.y = coord[1]
+                component.text = text
+                component.arrow_width = icon_width
+                component.arrow_height = icon_height
+                component.draw(draw)
+
             if self.left_text != "":
                 coord = joy_coords[JoystickInput.LEFT]
                 text = joy_text[JoystickInput.LEFT]
-                
-                # Draw Arrow
-                arrow_coords = [(arrow_left-1,coord[1] + arrow_mid_y),(arrow_right-1,coord[1] + arrow_bottom),(arrow_right-1,coord[1] + arrow_top)]
-                draw.polygon(arrow_coords, outline=255, fill=0)
-                
-                # Draw Text
-                draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+                component = self.JOY_COMPONENTS[JoystickInput.LEFT]
 
-            # Draw button text if not empty
+                component.x = coord[0]
+                component.y = coord[1]
+                component.text = text
+                component.arrow_width = icon_width
+                component.arrow_height = icon_height
+                component.draw(draw)
+
             if self.button_text != "":
                 coord = joy_coords[JoystickInput.BUTTON]
                 text = joy_text[JoystickInput.BUTTON]
+                component = self.JOY_COMPONENTS[JoystickInput.BUTTON]
 
-                # Draw Circle
-                icon_coords = [(circle_left, coord[1] + circle_top), (circle_right, coord[1] + circle_bottom)]
-                draw.ellipse(icon_coords, outline=255, fill=0)
-                
-                # Draw Text
-                draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
-                
-            # Draw right text if not empty
+                component.x = coord[0]
+                component.y = coord[1]
+                component.text = text
+                component.arrow_width = icon_width
+                component.arrow_height = icon_height
+                component.draw(draw)
+
             if self.right_text != "":
                 coord = joy_coords[JoystickInput.RIGHT]
                 text = joy_text[JoystickInput.RIGHT]
+                component = self.JOY_COMPONENTS[JoystickInput.RIGHT]
 
-                # Draw Arrow
-                arrow_coords = [(arrow_left,coord[1] + arrow_top),(arrow_left,coord[1] + arrow_bottom),(arrow_right, coord[1] + arrow_mid_y)]
-                draw.polygon(arrow_coords, outline=255, fill=0)
-                
-                # Draw Text
-                draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+                component.x = coord[0]
+                component.y = coord[1]
+                component.text = text
+                component.arrow_width = icon_width
+                component.arrow_height = icon_height
+                component.draw(draw)
 
-            # Draw down text if not empty
             if self.down_text != "":
                 coord = joy_coords[JoystickInput.DOWN]
                 text = joy_text[JoystickInput.DOWN]
+                component = self.JOY_COMPONENTS[JoystickInput.DOWN]
 
-                # Draw Arrow
-                arrow_coords = [(arrow_left,coord[1] + arrow_top),(arrow_right,coord[1] + arrow_top),(arrow_mid_x,coord[1] + arrow_bottom)]
-                draw.polygon(arrow_coords, outline=255, fill=0)
+                component.x = coord[0]
+                component.y = coord[1]
+                component.text = text
+                component.arrow_width = icon_width
+                component.arrow_height = icon_height
+                component.draw(draw)
+
+            
+
+            
+            # # Draw up text if not empty
+            # if self.up_text != "":
+            #     coord = joy_coords[JoystickInput.UP]
+            #     text = joy_text[JoystickInput.UP]
+
+            #     # Draw Arrow
+            #     arrow_coords = [(arrow_left,arrow_bottom + coord[1]),(arrow_right,arrow_bottom + coord[1]),(arrow_mid_x,arrow_top + coord[1])]
+            #     draw.polygon(arrow_coords, outline=255, fill=0)
                 
-                # Draw Text
-                draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+            #     # Draw Text
+            #     draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+            
+            # # Draw left text if not empty
+            # if self.left_text != "":
+            #     coord = joy_coords[JoystickInput.LEFT]
+            #     text = joy_text[JoystickInput.LEFT]
+                
+            #     # Draw Arrow
+            #     arrow_coords = [(arrow_left-1,coord[1] + arrow_mid_y),(arrow_right-1,coord[1] + arrow_bottom),(arrow_right-1,coord[1] + arrow_top)]
+            #     draw.polygon(arrow_coords, outline=255, fill=0)
+                
+            #     # Draw Text
+            #     draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+
+            # # Draw button text if not empty
+            # if self.button_text != "":
+            #     coord = joy_coords[JoystickInput.BUTTON]
+            #     text = joy_text[JoystickInput.BUTTON]
+
+            #     # Draw Circle
+            #     icon_coords = [(circle_left, coord[1] + circle_top), (circle_right, coord[1] + circle_bottom)]
+            #     draw.ellipse(icon_coords, outline=255, fill=0)
+                
+            #     # Draw Text
+            #     draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+                
+            # # Draw right text if not empty
+            # if self.right_text != "":
+            #     coord = joy_coords[JoystickInput.RIGHT]
+            #     text = joy_text[JoystickInput.RIGHT]
+
+            #     # Draw Arrow
+            #     arrow_coords = [(arrow_left,coord[1] + arrow_top),(arrow_left,coord[1] + arrow_bottom),(arrow_right, coord[1] + arrow_mid_y)]
+            #     draw.polygon(arrow_coords, outline=255, fill=0)
+                
+            #     # Draw Text
+            #     draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+
+            # # Draw down text if not empty
+            # if self.down_text != "":
+            #     coord = joy_coords[JoystickInput.DOWN]
+            #     text = joy_text[JoystickInput.DOWN]
+
+            #     # Draw Arrow
+            #     arrow_coords = [(arrow_left,coord[1] + arrow_top),(arrow_right,coord[1] + arrow_top),(arrow_mid_x,coord[1] + arrow_bottom)]
+            #     draw.polygon(arrow_coords, outline=255, fill=0)
+                
+            #     # Draw Text
+            #     draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
             
             # Draw Separator if not all Empty
-            if self.up_text != "" or self.down_text != "" or self.left_text != "" or self.right_text != "":
-                sep_x = joy_max_width + ((self.SEP_WIDTH - self.SEP_FILL_WIDTH) // 2)
-                sep_y = (self.SCREEN_HEIGHT - self.SEP_FILL_HEIGHT) // 2
-                draw.line([(sep_x,sep_y),(sep_x + self.SEP_FILL_WIDTH - 1,sep_y + self.SEP_FILL_HEIGHT)], fill=0)
+            if self.up_text != "" or self.down_text != "" or self.left_text != "" or self.right_text != "" or self.button_text != "":
+                sep_x = joy_max_width + ((self.sep_width - self.sep_fill_width) // 2)
+                sep_y = (self.SCREEN_HEIGHT - self.sep_fill_height) // 2
+
+                self.JOY_SEP_COMPONENT.x1 = sep_x
+                self.JOY_SEP_COMPONENT.y1 = sep_y
+                self.JOY_SEP_COMPONENT.x2 = sep_x + self.sep_fill_width - 1
+                self.JOY_SEP_COMPONENT.y2 = sep_y + self.sep_fill_height
+                self.JOY_SEP_COMPONENT.draw(draw)
+
+                # draw.line([(sep_x,sep_y),(sep_x + self.sep_fill_width - 1,sep_y + self.sep_fill_height)], fill=0)
             # Empty - Give room to View Text
             else:
                 joy_used = False
@@ -561,37 +876,61 @@ class ControlView(View):
             if self.key1_text != "":
                 coord = key_coords[KeyInput.KEY1]
                 text = key_text[KeyInput.KEY1]
+                component = self.KEY_COMPONENTS[KeyInput.KEY1]
 
-                draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+                component.x = coord[0]
+                component.y = coord[1]
+                component.text = text
+                component.draw(draw)
+
+                #draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
                 
             # Draw key 2 text if not empty
             if self.key2_text != "":
                 coord = key_coords[KeyInput.KEY2]
                 text = key_text[KeyInput.KEY2]
+                component = self.KEY_COMPONENTS[KeyInput.KEY2]
+
+                component.x = coord[0]
+                component.y = coord[1]
+                component.text = text
+                component.draw(draw)
                 
-                draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+                # draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
                 
             # Draw key 3 text if not empty
             if self.key3_text != "":
                 coord = key_coords[KeyInput.KEY3]
                 text = key_text[KeyInput.KEY3]
+                component = self.KEY_COMPONENTS[KeyInput.KEY3]
+
+                component.x = coord[0]
+                component.y = coord[1]
+                component.text = text
+                component.draw(draw)
                 
-                draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
+                # draw.multiline_text(coord, text, font=self.cont_font, fill=0, spacing=self.LINE_SPACING, align=self.TEXT_ALIGN)
             
             # Draw Separator if not all Empty
             if self.key1_text != "" or self.key2_text != "" or self.key3_text != "":
-                sep_x = self.SCREEN_WIDTH - key_max_width - ((self.SEP_WIDTH + self.SEP_FILL_WIDTH) // 2)
-                sep_y = (self.SCREEN_HEIGHT - self.SEP_FILL_HEIGHT) // 2
-                draw.line([(sep_x,sep_y),(sep_x + self.SEP_FILL_WIDTH - 1,sep_y + self.SEP_FILL_HEIGHT)], fill=0)
+                sep_x = self.SCREEN_WIDTH - key_max_width - ((self.sep_width + self.sep_fill_width) // 2)
+                sep_y = (self.SCREEN_HEIGHT - self.sep_fill_height) // 2
+
+                self.KEY_SEP_COMPONENT.x1 = sep_x
+                self.KEY_SEP_COMPONENT.y1 = sep_y
+                self.KEY_SEP_COMPONENT.x2 = sep_x + self.sep_fill_width - 1
+                self.KEY_SEP_COMPONENT.y2 = sep_y + self.sep_fill_height
+
+                #draw.line([(sep_x,sep_y),(sep_x + self.sep_fill_width - 1,sep_y + self.sep_fill_height)], fill=0)
             # Empty - Give room to View Text
             else:
                 keys_used = False
         
-        start_x = ((joy_max_width + self.SEP_WIDTH)
+        start_x = ((joy_max_width + self.sep_width)
                 if self.joy_controls_en and joy_used
                 else 0)
             
-        end_x = ((self.SCREEN_WIDTH - key_max_width - self.SEP_WIDTH)
+        end_x = ((self.SCREEN_WIDTH - key_max_width - self.sep_width)
             if self.key_controls_en and keys_used
             else self.SCREEN_WIDTH)
 
