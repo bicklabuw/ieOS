@@ -1,0 +1,11 @@
+gpiozero 
+soundfile 
+sounddevice 
+numpy
+pillow
+pynput
+pygame
+smbus; sys_platform=='linux'
+spidev; sys_platform=='linux'
+RPi.GPIO; sys_platform=='linux'
+lgpio; sys_platform=='linux'

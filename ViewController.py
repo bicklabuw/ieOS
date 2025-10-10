@@ -1,13 +1,11 @@
 from __future__ import annotations
-from View import View
-from SelectableView import SelectableView
-from SelectionManager import SelectionManager
+from View import View, ViewControllerView
+from SelectionManager import SelectionManager, Direction
 from abc import ABC
 from OSGlobals import put_view_controller_transition
 from enum import Enum
 from typing import Callable, Generic, TypeVar, Any
 from InputUtils import InputCode, InputPhase
-import Display
 
 class ViewControllerTransitionType(Enum):
     PUSH = 0
@@ -27,11 +25,13 @@ class ViewController(Generic[T]):
     def __init__(self) -> None:
         """Initialize with a full-screen default view."""
         # Root view covers the entire screen by default
-        self.view = View(0, 0, Display.SCREEN_WIDTH, Display.SCREEN_HEIGHT)
+        print("ViewController init")
+        print(self)
+        self.view = ViewControllerView(self)
         self.selection = SelectionManager(self.view, wrap=True)
 
     def on_appear(self) -> None:
-        pass
+        self.view._mark_dirty()
 
     def on_disappear(self) -> None:
         pass
@@ -41,16 +41,24 @@ class ViewController(Generic[T]):
         phase: InputPhase,
         held: bool
     ) -> bool:
-        return False
+        name = f'on_{code.name.lower()}_{phase.name.lower()}'
+        method = getattr(self, name, None)
+        print(f"Handling override for {code} in phase {phase}")
+        if not method:
+            return False
+        print(f"Method found: {method}")
+        ret_val = method(held) if phase == InputPhase.RELEASE else method()
+        return ret_val if isinstance(ret_val, bool) else True
 
     def handle_wrap(self, code: InputCode) -> None:
-        self.pop_view_controller()
+        pass
 
     def on_event(
         self, code: InputCode,
         phase: InputPhase,
         held: bool = False
     ) -> None:
+        print(f"ViewController on_event: {code}, {phase}, held={held}")
         if self.handle_override(code, phase, held):
             return
         cur = self.selection.current
@@ -60,17 +68,23 @@ class ViewController(Generic[T]):
             InputCode.UP, InputCode.DOWN,
             InputCode.LEFT, InputCode.RIGHT
         ):
-            dx = -1 if code == InputCode.LEFT else 1 if code == InputCode.RIGHT else 0
-            dy = -1 if code == InputCode.UP else 1 if code == InputCode.DOWN else 0
-            if self.selection.move(dx, dy):
+            print("Attempting toi move")
+            if self.selection.move(Direction.from_code(code)):
                 return
             self.handle_wrap(code)
             return
-        if code == InputCode.ACTIVATE and phase == InputPhase.PRESS:
+        if code == InputCode.BUTTON and phase == InputPhase.PRESS:
             cur = self.selection.current
-            if isinstance(cur, SelectableView) and cur.children:
+            if cur is None:
+                print("No current selection to handle button press")
+                return
+            if cur.selectable and len(cur.subviews) > 0:
                 self.selection.drill_in()
                 return
+
+    def on_layout(self) -> None:
+        """Override this method to handle layout changes."""
+        pass
 
     def push_view_controller(
         self, vc: ViewController[T],
@@ -104,12 +118,34 @@ class ViewController(Generic[T]):
         if hasattr(self, '_return_callback'):
             self._return_callback(return_data)
         t = ViewControllerTransition(None, ViewControllerTransitionType.POP)
+        print(f"Pop view controller: {t}")
         put_view_controller_transition(t)
 
     def pop_to_root_view_controller(self) -> None:
         """Pop back to the initial/root controller."""
         t = ViewControllerTransition(None, ViewControllerTransitionType.POP_TO_ROOT)
+        print(f"Pop to root view controller: {t}")
         put_view_controller_transition(t)
+
+    def on_removing_selected_view(self, subview: View) -> None:
+        """
+        Called when a selected view is removed from its parent.
+        Override to handle any special cleanup.
+        """
+        self.selection.handle_selected_view_being_removed(subview)
+
+    def on_adding_selectable_view(
+        self, parent: View,
+        subview: View
+    ) -> None:
+        """
+        Called when a selectable view is added to its parent.
+        Override to handle any special setup.
+        """
+        print(f"Adding selectable view: {subview}")
+        if parent == self.selection.current_parent and self.selection.current is None:
+            print(f"Adding selectable view to current parent: {parent}")
+            self.selection._enter(0)
     
 class ViewControllerTransition:
     def __init__(self, vc: ViewController, vc_transition_type: ViewControllerTransitionType):

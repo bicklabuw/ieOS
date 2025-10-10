@@ -178,7 +178,7 @@ class RecordViewController(ViewController):
         create_recordings_dir()
         self.start()
 
-    def on_key_2_press(self):
+    def on_key2_press(self):
         self.view.view_text = "Stopping"
         self.view.key_controls_en = False
 

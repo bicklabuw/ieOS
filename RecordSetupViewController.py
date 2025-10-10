@@ -28,21 +28,21 @@ class RecordSetupViewController(ViewController):
 
         self.present_view(self.view)
     
-    def on_key_1_press(self):
+    def on_key1_press(self):
         self._duration += self.BUTTON_CHG_AMT
         self.view.update_select_view(self._duration)
 
-    def on_key_1_hold(self):
+    def on_key1_hold(self):
         self._duration += (self.KEY_HOLD_INCR_HIGH_AMT - (self._duration % self.KEY_HOLD_INCR_HIGH_AMT)
                             if self._duration > self.KEY_HOLD_LOW_HIGH_SEPARATOR
                             else self.KEY_HOLD_INCR_LOW_AMT - (self._duration % self.KEY_HOLD_INCR_LOW_AMT))
         self.view.update_select_view(self._duration)
 
-    def on_key_2_press(self):
+    def on_key2_press(self):
         self._duration -= self.BUTTON_CHG_AMT if self._duration >= self.MIN_TIME + self.BUTTON_CHG_AMT else self._duration - self.MIN_TIME
         self.view.update_select_view(self._duration)
 
-    def on_key_2_hold(self):
+    def on_key2_hold(self):
         if self._duration > self.KEY_HOLD_LOW_HIGH_SEPARATOR:
             mod_val = self._duration % self.KEY_HOLD_INCR_HIGH_AMT
             self._duration -= mod_val if mod_val != 0 else self.KEY_HOLD_INCR_HIGH_AMT
@@ -54,27 +54,27 @@ class RecordSetupViewController(ViewController):
             self._duration = self.MIN_TIME
         self.view.update_select_view(self._duration)
 
-    def on_key_3_press(self):
+    def on_key3_press(self):
         print("start")
         self.change_view_controller(RecordViewController(), ChangeViewControllerType.PUSH)
         #draw_text(f" Started for {self._duration}s")
         #view_controller.present_view(record_view)
 
-    def on_joy_up_press(self):
+    def on_up_press(self):
         self._duration += self.JOY_CHG_AMT
         self.view.update_select_view(self._duration)
 
-    def on_joy_up_hold(self):
+    def on_up_hold(self):
         self._duration += (self.JOY_HOLD_INCR_HIGH_AMT - (self._duration % self.JOY_HOLD_INCR_HIGH_AMT)
                             if self._duration > self.JOY_HOLD_LOW_HIGH_SEPARATOR
                             else self.JOY_HOLD_INCR_LOW_AMT - (self._duration % self.JOY_HOLD_INCR_LOW_AMT))
         self.view.update_select_view(self._duration)
 
-    def on_joy_down_press(self):
+    def on_down_press(self):
         self._duration -= self.JOY_CHG_AMT if self._duration >= self.MIN_TIME + self.JOY_CHG_AMT else self._duration - self.MIN_TIME
         self.view.update_select_view(self._duration)
 
-    def on_joy_down_hold(self):
+    def on_down_hold(self):
         if self._duration > self.JOY_HOLD_LOW_HIGH_SEPARATOR:
             mod_val = self._duration % self.JOY_HOLD_INCR_HIGH_AMT
             self._duration -= mod_val if mod_val != 0 else self.JOY_HOLD_INCR_HIGH_AMT
@@ -89,11 +89,11 @@ class RecordSetupViewController(ViewController):
             self._duration = self.MIN_TIME
         self.view.update_select_view(self._duration)
 
-    def on_joy_left_press(self):
+    def on_left_press(self):
         self.change_view_controller(MicTestViewController(), ChangeViewControllerType.PUSH)
         #self.change_view_controller(mic_test_view)
 
-    def on_joy_button_press(self):
+    def on_button_press(self):
         self._duration = self.DEF_DURATION
         self.view.update_select_view(self._duration)
         pass

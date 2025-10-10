@@ -1,0 +1,17 @@
+touch ieos
+
+Move files from pendrive to ieos folder
+
+python-m venv venv
+source venv/bin/activate
+pip install spidev && pip install gpiozero && pip install soundfile && pip install sounddevice && pip install numpy && pip install smbus && pip install pillow && pip install RPi.GPIO && pip install lgpio
+sudo raspi-config
+    Interface options <Select>
+    I4 SPI <Select>
+    <Yes>
+    <ok>
+    <Finish>
+chmod u+x format.sh
+crontab-e
+# On an empty line enter the below:
+@reboot /home/ie/ieos/venv/bin/python3 /home/ie/ieos/PendriveReformatViewController.py &

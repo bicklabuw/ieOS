@@ -1,54 +1,78 @@
-from View import View
-from ViewController import ViewController
-from OSGlobals import get_current_view_controller
-from OSGlobals import get_view_controller_changed_flag, clear_view_controller_changed_flag
-from Components import Component
-from PIL import Image, ImageDraw
-from typing import List
-
-import Display
 import time
+from View import View
+from OSGlobals import get_current_view_controller, get_debug_viewer
+import Display
 
-def render_thread(frame_time: float):
-    # TODO make frame_time more accurate (doesn't account for time in checking if view changed)
+def _subtree_dirty(view: View) -> bool:
+    # Recursively check this view and all subviews for a dirty flag.
+    if getattr(view, "_dirty", False):
+        #print("Subtree dirty: ", view)
+        return True
+    for sv in view.subviews:
+        if _subtree_dirty(sv):
+            #print("Checking subview dirty: ", sv)
+            return True
+    return False
+
+def render_thread(frame_time: float, on_disp: bool = True, on_screen: bool = False) -> None:
+    """
+    Redraw the current view controller’s main view up to once every `frame_time`
+    seconds, but only when something’s actually changed.
+    If `on_disp` is True, it will push the rendered image to the external display.
+    If `on_screen` is True, it will push the rendered image to the OS's screen as an application.
+    """
+    debug_viewer = get_debug_viewer()
+    frame_limit = int(1 / frame_time) if frame_time > 0 else None
+
+    prev_img = None
+    max_sec_before_unresponsive = 1
+    screen_max_wait = max_sec_before_unresponsive / frame_time
+    screen_cur_wait_frames = 0
+
     while True:
-        start_time = time.time()
-
-        view_controller: ViewController = get_current_view_controller()
-        if view_controller is None:
+        start = time.time()
+        vc = get_current_view_controller()
+        if vc is None:
+            time.sleep(frame_time)
             continue
-        
-        view = view_controller.get_presented_view()
+
+        view = vc.view
         if view is None:
+            time.sleep(frame_time)
             continue
 
-        components: List[Component] = view.get_components()
-        any_changed = get_view_controller_changed_flag()
+        # Only redraw if any view/subview is dirty
+        if _subtree_dirty(view):
+            # print("Render Thread: ", view)
+            # New monochrome buffer
+            img = Display.create_image()
+            #draw = ImageDraw.Draw(img)
 
-        if any_changed:
-            clear_view_controller_changed_flag()
+            # Let the framework walk the tree and clear dirty flags
+            view.draw(img)
 
-        for component in components:
-            if component.get_changed_flag():
-                any_changed = True
-                component.clear_changed_flag()
-        
-        if any_changed:
-            draw(components)
+            # Push to the physical display
+            if on_disp:
+                Display.disp.ShowImage(Display.disp.getbuffer(img))
 
-        end_time = time.time()
-        time_diff = end_time - start_time
-        if time_diff < frame_time:
-            time.sleep(frame_time - time_diff)
+            if on_screen:
+                # Push to the OS's screen
+                # print("RENDER - ON CHANGE TO VIEW")
+                # print(img)
+                # img.show()
+                debug_viewer.show(img)
+                prev_img = img
+                screen_cur_wait_frames = 0
+        elif on_screen:
+            if screen_cur_wait_frames == screen_max_wait and prev_img is not None:
+                # Push to the OS's screen to prevent appearing unresponsive
+                print("RENDER - NO CHANGE")
+                debug_viewer.show(prev_img)
+                screen_cur_wait_frames = 0
+            
+            screen_cur_wait_frames += 1
 
-def draw(components: List[Component]):
-    image = Image.new('1', (Display.SCREEN_WIDTH, Display.SCREEN_HEIGHT), Display.SCREEN_TEXT_COLOR)
-
-    # Get drawing object to draw on image.
-    draw = ImageDraw.Draw(image)
-
-    for component in components:
-        component.draw(draw)
-    
-    # Draw the Screen onto the display
-    Display.disp.ShowImage(Display.disp.getbuffer(image))
+        # Sleep to maintain roughly the desired frame rate
+        elapsed = time.time() - start
+        if elapsed < frame_time:
+            time.sleep(frame_time - elapsed)

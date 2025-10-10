@@ -1,13 +1,17 @@
 import threading
 from OSGlobals import get_current_view_controller, set_current_view_controller
 from OSGlobals import get_view_controller_thread, set_view_controller_thread
-from OSGlobals import set_render_thread, set_polling_thread
+from OSGlobals import set_polling_thread, set_view_controller_transition_thread
 from OSGlobals import pop_view_controller_transition
 from OSGlobals import set_view_controller_changed_flag
+from OSGlobals import set_debug_viewer
 from OSGlobals import FRAME_TIME, POLLING_SLEEP_TIME
 from OSGlobals import JOIN_TIMEOUT_TIME
 from collections import deque
 from typing import Optional
+from PlatformUtils import is_raspberry_pi
+
+import argparse
 
 import RenderThread
 import PollingThread
@@ -21,6 +25,7 @@ def update_vc_heirarchy(vc_transition: ViewControllerTransition) -> Optional[Vie
     global VC_Heirarchy
     if vc_transition.type == ViewControllerTransitionType.PUSH:
         VC_Heirarchy.append(vc_transition.vc)
+        print(VC_Heirarchy)
     elif vc_transition.type == ViewControllerTransitionType.SWAP:
         VC_Heirarchy.pop()
         VC_Heirarchy.append(vc_transition.vc)
@@ -28,6 +33,7 @@ def update_vc_heirarchy(vc_transition: ViewControllerTransition) -> Optional[Vie
         VC_Heirarchy.clear()
         VC_Heirarchy.append(vc_transition.vc)
     elif vc_transition.type == ViewControllerTransitionType.POP:
+        print("Popping VC: ", VC_Heirarchy)
         VC_Heirarchy.pop()
         return VC_Heirarchy[-1]
     elif vc_transition.type == ViewControllerTransitionType.POP_TO_ROOT:
@@ -97,7 +103,9 @@ def change_view_controller(vc_transition: ViewControllerTransition):
 #     else:
 #         self.active_view_thread = None
 
-def start_view_controller_transition_processor():
+def view_controller_transition_thread(initial_view_controller: ViewController):
+    change_view_controller(ViewControllerTransition(initial_view_controller, ViewControllerTransitionType.CLEAR))
+
     while True:
         # Process view controller transitions
         vc_transition = pop_view_controller_transition()
@@ -105,24 +113,46 @@ def start_view_controller_transition_processor():
         if vc_transition is not None:
             change_view_controller(vc_transition)
 
-def start_render_thread(frame_time: float):
-    # Create and start the render thread
-    render_thread = threading.Thread(target=RenderThread.render_thread, args=(frame_time,))
-    set_render_thread(render_thread)
-    render_thread.start()
-
-def start_polling_thread(sleep_time: float):
+def start_polling_thread(sleep_time: float, on_disp: bool = True, on_keyboard: bool = False):
     # Create and start the polling thread
-    polling_thread = threading.Thread(target=PollingThread.polling_thread, args=(sleep_time,))
+    polling_thread = threading.Thread(target=PollingThread.polling_thread, args=(sleep_time, on_disp, on_keyboard), daemon=True)
     set_polling_thread(polling_thread)
     polling_thread.start()
 
+def start_view_controller_transition_thread(initial_view_controller: ViewController):
+    # Create and start the view controller transition thread
+    transition_thread = threading.Thread(target=view_controller_transition_thread, args=(initial_view_controller,), daemon=True) # Comma is necessary
+    set_view_controller_transition_thread(transition_thread)
+    transition_thread.start()
+
 def main(initial_view_controller: ViewController):
+    parser = argparse.ArgumentParser("Debug Settings")
+    parser.add_argument("-k", "--keyboard", action='store_true', help="Enable keyboard input")
+    parser.add_argument("-s", "--screen", action='store_true', help="Enable output on OS's screen")
+    parser.add_argument("-K", "--keyboard_only", action='store_true', help="Enable keyboard input and disable display input")
+    parser.add_argument("-S", "--screen_only", action='store_true', help="Enable output on OS's screen and disable output on display")
+    parser.add_argument("-o", "--no_display", action='store_true', help="Only use keyboard input and OS's screen as output. No display needed in this configuration.")
+
+    args = parser.parse_args()
+
+    is_not_rpi = not is_raspberry_pi()
+    
+    disp_in_en = not (args.keyboard_only or args.no_display or is_not_rpi)
+    keyboard_en = args.keyboard or args.keyboard_only or args.no_display or is_not_rpi
+
+    disp_out_en = not (args.screen_only or args.no_display or is_not_rpi)
+    screen_en = args.screen or args.screen_only or args.no_display or is_not_rpi
+
     # Init the display
-    Display.init()
+    if disp_in_en or disp_out_en:
+        Display.init()
+    
+    if keyboard_en or screen_en:
+        from DebugViewer import DebugViewer
+        set_debug_viewer(DebugViewer((Display.SCREEN_WIDTH, Display.SCREEN_HEIGHT)))
 
-    change_view_controller(ViewControllerTransition(initial_view_controller, ViewControllerTransitionType.CLEAR))
-    start_render_thread(FRAME_TIME)
-    start_polling_thread(POLLING_SLEEP_TIME)
+    start_polling_thread(POLLING_SLEEP_TIME, disp_in_en, keyboard_en)
+    start_view_controller_transition_thread(initial_view_controller)
 
-    start_view_controller_transition_processor()
+    # Start the render thread (now the main thread)
+    RenderThread.render_thread(FRAME_TIME, disp_out_en, screen_en)

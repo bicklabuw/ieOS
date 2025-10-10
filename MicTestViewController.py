@@ -23,7 +23,7 @@ class MicTestViewController(ViewController):
 
         self.present_view(self.view)
 
-    def on_joy_right_press(self):
+    def on_right_press(self):
         self.pop_view_controller()
 
     def stop(self):

@@ -21,12 +21,14 @@ _current_view_controller = None
 _view_controller_transitions = SimpleQueue()
 _view_controller_changed = False
 
-_render_thread = None
+_view_controller_transition_thread = None
 _polling_thread = None
 _view_controller_thread = None
 
-def on_render_thread() -> bool:
-    return threading.current_thread() == _render_thread
+_debug_viewer = None
+
+def on_view_controller_transition_thread_thread() -> bool:
+    return threading.current_thread() == _view_controller_transition_thread
 
 def get_current_view_controller() -> Optional[ViewController]:
     global _current_view_controller
@@ -50,10 +52,10 @@ def set_view_controller_changed_flag():
 
 def clear_view_controller_changed_flag():
     global _view_controller_changed
-    if on_render_thread():
+    if threading.current_thread() == threading.main_thread():
         _view_controller_changed = False
     else:
-        raise RuntimeError("Cannot clear view controller changed flag from non-render thread")
+        raise RuntimeError("Cannot clear view controller changed flag from non-render (main) thread")
     
 def pop_view_controller_transition() -> ViewControllerTransition:
     global _view_controller_transitions
@@ -68,21 +70,21 @@ def put_view_controller_transition(vc_transition: ViewControllerTransition):
 
 def set_view_controller_thread(vc_thread: threading.Thread):
     # Only allow on main thread
-    if threading.current_thread() == threading.main_thread():
+    if on_view_controller_transition_thread_thread():
         global _view_controller_thread
         _view_controller_thread = vc_thread
     else:
-        raise RuntimeError("Cannot set view controller thread from non-main thread")
+        raise RuntimeError("Cannot set view controller thread from non view controller transition thread")
     
-def set_render_thread(render_thread: threading.Thread):
+def set_view_controller_transition_thread(view_controller_transition_thread: threading.Thread):
     # Only allow on main thread
     if threading.current_thread() == threading.main_thread():
-        global _render_thread
-        if _render_thread is not None:
-            raise RuntimeError("Render thread already set")
-        _render_thread = render_thread
+        global _view_controller_transition_thread
+        if _view_controller_transition_thread is not None:
+            raise RuntimeError("View Controller Transition Thread thread already set")
+        _view_controller_transition_thread = view_controller_transition_thread
     else:
-        raise RuntimeError("Cannot set render thread from non-main thread")
+        raise RuntimeError("Cannot set view controller transition thread from non-main thread")
     
 def set_polling_thread(polling_thread: threading.Thread):
     # Only allow on main thread
@@ -102,6 +104,14 @@ def set_polling(value: bool = True):
     global _polling
     _polling = value
 
-def stop_polling_input(self):
+def stop_polling_input():
     global _polling
     _polling = False
+
+def get_debug_viewer():
+    global _debug_viewer
+    return _debug_viewer
+
+def set_debug_viewer(debug_viewer: DebugViewer):
+    global _debug_viewer
+    _debug_viewer = debug_viewer

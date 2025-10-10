@@ -273,24 +273,24 @@ def update_connection_view(redraw: bool = True):
     
     print(upload_str)
 
-def sel_on_key_1_press():
+def sel_on_key1_press():
     global selected_duration
     selected_duration += BUTTON_CHG_AMT
     update_select_view(selected_duration)
 
-def sel_on_key_1_hold():
+def sel_on_key1_hold():
     global selected_duration
     selected_duration += (KEY_HOLD_INCR_HIGH_AMT - (selected_duration % KEY_HOLD_INCR_HIGH_AMT)
                         if selected_duration > KEY_HOLD_LOW_HIGH_SEPARATOR
                         else KEY_HOLD_INCR_LOW_AMT - (selected_duration % KEY_HOLD_INCR_LOW_AMT))
     update_select_view(selected_duration)
 
-def sel_on_key_2_press():
+def sel_on_key2_press():
     global selected_duration
     selected_duration -= BUTTON_CHG_AMT if selected_duration >= MIN_TIME + BUTTON_CHG_AMT else selected_duration - MIN_TIME
     update_select_view(selected_duration)
 
-def sel_on_key_2_hold():
+def sel_on_key2_hold():
     global selected_duration
     if selected_duration > KEY_HOLD_LOW_HIGH_SEPARATOR:
         mod_val = selected_duration % KEY_HOLD_INCR_HIGH_AMT
@@ -303,30 +303,30 @@ def sel_on_key_2_hold():
         selected_duration = MIN_TIME
     update_select_view(selected_duration)
 
-def sel_on_key_3_press():
+def sel_on_key3_press():
     global record_view
     print("start")
     #draw_text(f" Started for {selected_duration}s")
     view_controller.present_view(record_view)
 
-def sel_on_joy_up_press():
+def sel_on_up_press():
     global selected_duration
     selected_duration += JOY_CHG_AMT
     update_select_view(selected_duration)
 
-def sel_on_joy_up_hold():
+def sel_on_up_hold():
     global selected_duration
     selected_duration += (JOY_HOLD_INCR_HIGH_AMT - (selected_duration % JOY_HOLD_INCR_HIGH_AMT)
                         if selected_duration > JOY_HOLD_LOW_HIGH_SEPARATOR
                         else JOY_HOLD_INCR_LOW_AMT - (selected_duration % JOY_HOLD_INCR_LOW_AMT))
     update_select_view(selected_duration)
 
-def sel_on_joy_down_press():
+def sel_on_down_press():
     global selected_duration
     selected_duration -= JOY_CHG_AMT if selected_duration >= MIN_TIME + JOY_CHG_AMT else selected_duration - MIN_TIME
     update_select_view(selected_duration)
 
-def sel_on_joy_down_hold():
+def sel_on_down_hold():
     global selected_duration
     if selected_duration > JOY_HOLD_LOW_HIGH_SEPARATOR:
         mod_val = selected_duration % JOY_HOLD_INCR_HIGH_AMT
@@ -342,22 +342,22 @@ def sel_on_joy_down_hold():
         selected_duration = MIN_TIME
     update_select_view(selected_duration)
 
-def sel_on_joy_left_press():
+def sel_on_left_press():
     global mic_test_view
     view_controller.present_view(mic_test_view)
 
-def sel_on_joy_right_press():
+def sel_on_right_press():
     global connection_view
     update_connection_view(False)
-    print(connection_view.on_joy_left_press)
+    print(connection_view.on_left_press)
     view_controller.present_view(connection_view)
 
-def sel_on_joy_button_press():
+def sel_on_button_press():
     global selected_duration
     selected_duration = DEF_DURATION
     update_select_view(selected_duration)
 
-def conn_on_key_2_press():
+def conn_on_key2_press():
     global upload_files
     global upload_inited
     global upload_allowed
@@ -373,12 +373,12 @@ def conn_on_key_2_press():
                 upload_inited = False
         update_connection_view()
 
-def conn_on_joy_left_press():
+def conn_on_left_press():
     global select_view
     print("PRESENTING")
     view_controller.present_view(select_view)
 
-def mic_test_on_joy_right_press():
+def mic_test_on_right_press():
     global select_view
     view_controller.present_view(select_view)
 
@@ -386,7 +386,7 @@ def rec_on_appear():
     global selected_duration
     start(selected_duration)
 
-def rec_on_key_2_press():
+def rec_on_key2_press():
     global record_view
     global stop_recording
 
@@ -419,7 +419,7 @@ def main():
             upload_inited = False
 
         select_view.right_text = "Wifi"#"Upload"
-        select_view.on_joy_right_press = sel_on_joy_right_press
+        select_view.on_right_press = sel_on_right_press
     
     select_view.up_text = "+10"
     select_view.down_text = "-10"
@@ -434,27 +434,27 @@ def main():
 
     record_view.key2_text = "Stop"
 
-    select_view.on_key_1_press = sel_on_key_1_press
-    select_view.on_key_1_hold = sel_on_key_1_hold
-    select_view.on_key_2_press = sel_on_key_2_press
-    select_view.on_key_2_hold = sel_on_key_2_hold
-    select_view.on_key_3_press = sel_on_key_3_press
+    select_view.on_key1_press = sel_on_key1_press
+    select_view.on_key1_hold = sel_on_key1_hold
+    select_view.on_key2_press = sel_on_key2_press
+    select_view.on_key2_hold = sel_on_key2_hold
+    select_view.on_key3_press = sel_on_key3_press
 
-    select_view.on_joy_up_press = sel_on_joy_up_press
-    select_view.on_joy_up_hold = sel_on_joy_up_hold
-    select_view.on_joy_down_press = sel_on_joy_down_press
-    select_view.on_joy_down_hold = sel_on_joy_down_hold
-    select_view.on_joy_left_press = sel_on_joy_left_press
-    select_view.on_joy_button_press = sel_on_joy_button_press
+    select_view.on_up_press = sel_on_up_press
+    select_view.on_up_hold = sel_on_up_hold
+    select_view.on_down_press = sel_on_down_press
+    select_view.on_down_hold = sel_on_down_hold
+    select_view.on_left_press = sel_on_left_press
+    select_view.on_button_press = sel_on_button_press
 
-    connection_view.on_key_2_press = conn_on_key_2_press
-    connection_view.on_joy_left_press = conn_on_joy_left_press
+    connection_view.on_key2_press = conn_on_key2_press
+    connection_view.on_left_press = conn_on_left_press
 
-    mic_test_view.on_joy_right_press = mic_test_on_joy_right_press
+    mic_test_view.on_right_press = mic_test_on_right_press
     mic_test_view.on_appear = mic_test_view.run
 
     record_view.on_appear = rec_on_appear
-    record_view.on_key_2_press = rec_on_key_2_press
+    record_view.on_key2_press = rec_on_key2_press
     record_view.on_disappear = rec_on_disappear
 
     update_select_view(selected_duration, False)

@@ -1,15 +1,13 @@
-import config
 import time
 import numpy as np
-
-Device_SPI = config.Device_SPI
-Device_I2C = config.Device_I2C
 
 LCD_WIDTH   = 128 #LCD width
 LCD_HEIGHT  = 64  #LCD height
 
 class SH1106(object):
     def __init__(self):
+        import config
+
         self.width = LCD_WIDTH
         self.height = LCD_HEIGHT
         #Initialize DC RST pin
@@ -18,10 +16,13 @@ class SH1106(object):
         self._rst = self.RPI.GPIO_RST_PIN
         self.Device = self.RPI.Device
 
+        self.Device_SPI = config.Device_SPI
+        self.Device_I2C = config.Device_I2C
+
 
     """    Write register address and data     """
     def command(self, cmd):
-        if(self.Device == Device_SPI):
+        if(self.Device == self.Device_SPI):
             self.RPI.digital_write(self._dc,False)
             self.RPI.spi_writebyte([cmd])
         else:
@@ -116,10 +117,10 @@ class SH1106(object):
             self.command(0x10); 
             # write data #
             # time.sleep(0.01)
-            if(self.Device == Device_SPI):
+            if(self.Device == self.Device_SPI):
                 self.RPI.digital_write(self._dc,True)
             for i in range(0,self.width):#for(int i=0;i<self.width; i++)
-                if(self.Device == Device_SPI):
+                if(self.Device == self.Device_SPI):
                     self.RPI.spi_writebyte([~pBuf[i+self.width*page]]); 
                 else :
                     self.RPI.i2c_writebyte(0x40, ~pBuf[i+self.width*page])
