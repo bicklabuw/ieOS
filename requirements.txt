@@ -3,6 +3,7 @@ soundfile
 sounddevice 
 numpy
 pillow
+Pillow
 pynput
 pygame
 smbus; sys_platform=='linux'
