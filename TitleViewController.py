@@ -1,8 +1,10 @@
 from ViewController import ViewController
 from Views import MultilineTextView, TextAlignment, TextAnchor
 from TextOverflowUtils import add_newlines_to_oveflowing_text
+from typing import TypeVar, Generic
 
-class TitleViewController(ViewController):
+T = TypeVar('T')
+class TitleViewController(ViewController[T]):
     def __init__(self, title: str) -> None:
         super().__init__()
 
