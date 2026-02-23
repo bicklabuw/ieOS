@@ -13,6 +13,7 @@ class Button(View):
     ) -> None:
         super().__init__(x, y, width, height, selectable=enabled)
         self._label = CenteredLabel(text=text)
+        self._label.selectable = False
         self.add_subview(self._label)
 
         self.callback = callback
