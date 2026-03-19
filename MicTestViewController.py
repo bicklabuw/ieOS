@@ -166,11 +166,17 @@ class MicTestViewController(ViewController[bool]):
     def _process_audio(self) -> None:
         while not self._stop:
             for i, q in enumerate(self._queues):
-                try:
-                    data = q.get_nowait()
-                    self._view.update_amplitude(i, float(np.max(np.abs(data))))
-                except queue.Empty:
-                    pass
+                peak = None
+                while True:
+                    try:
+                        data = q.get_nowait()
+                        amp = float(np.max(np.abs(data)))
+                        if peak is None or amp > peak:
+                            peak = amp
+                    except queue.Empty:
+                        break
+                if peak is not None:
+                    self._view.update_amplitude(i, peak)
             time.sleep(0.05)
 
     def _stop_all(self) -> None:

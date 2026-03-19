@@ -386,8 +386,13 @@ class DateTimeInputViewController(ViewController[datetime]):
                 self.select(self.time_input_view)
         else:
             self.pop()
-            
+
         return True
+
+    def on_key2_press(self) -> bool:
+        self.pop_view_controller(None)
+        return True
+
     def pop(self):
         self.date = datetime(year=self.date_input_view.year.value, month=self.date_input_view.month.value, day=self.date_input_view.day.value, hour=self.time_input_view.hours.value, minute=self.time_input_view.minutes.value, second=self.time_input_view.seconds.value)
         self.pop_view_controller(self.date)
