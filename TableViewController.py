@@ -153,13 +153,15 @@ class TableViewCell(CoordinateView):
 
 
 class TableViewController(ViewController[str]):
-    def __init__(self, items: list[str], pop_on_confirm: bool = True) -> None:
+    def __init__(self, items: list[str], pop_on_confirm: bool = True, sentinel_items: list[str] | None = None) -> None:
         super().__init__()
         self._pop_on_confirm = pop_on_confirm
 
         self.selection = SelectionManager(self.view, wrap=False)
 
-        self._items: list[str] = list(items)
+        self._sentinel_items: list[str] = list(sentinel_items) if sentinel_items else []
+        self._base_items: list[str] = list(items)
+        self._items: list[str] = self._merge_items()
         self._offset: int = 0
 
         arrow_x = (SCREEN_WIDTH - _ARROW_SIZE) // 2
@@ -198,6 +200,25 @@ class TableViewController(ViewController[str]):
         self._reload_cells()
         self._update_arrows()
 
+    def _merge_items(self) -> list[str]:
+        sentinel_set = set(self._sentinel_items)
+        rest = [x for x in self._base_items if x not in sentinel_set]
+        return self._sentinel_items + rest
+
+    def set_sentinel_items(self, sentinels: list[str]) -> None:
+        self._sentinel_items = list(sentinels)
+        self._items = self._merge_items()
+        self._offset = 0
+        self._reload_cells()
+        self._update_arrows()
+
+    def set_items(self, items: list[str]) -> None:
+        self._base_items = list(items)
+        self._items = self._merge_items()
+        self._offset = 0
+        self._reload_cells()
+        self._update_arrows()
+
     def _reload_cells(self) -> None:
         for i, cell in enumerate(self._cells):
             idx = self._offset + i
@@ -231,6 +252,10 @@ class TableViewController(ViewController[str]):
             self._offset += 1
             self._reload_cells()
             self._update_arrows()
+
+    def on_key2_press(self) -> bool:
+        self.pop_view_controller(None)
+        return True
 
     def did_highlight_row_at(self, index: int) -> None:
         pass

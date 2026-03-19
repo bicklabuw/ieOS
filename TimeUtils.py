@@ -27,7 +27,7 @@ def set_system_time(datetime_str):
     """
     try:
         # Disable Time Sync First
-        subprocess.run(["timedatectl", "set-ntp", "false"], check=True)
+        subprocess.run(["sudo", "timedatectl", "set-ntp", "false"], check=True)
 
         # Set the System Time
         subprocess.run(

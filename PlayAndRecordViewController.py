@@ -4,7 +4,6 @@ import queue
 import time
 import sys
 from datetime import datetime
-
 import sounddevice as sd
 import soundfile as sf
 import numpy as np
@@ -25,14 +24,14 @@ class PlayAndRecordViewController(ViewController[None]):
     File naming: rec_{MM}_{DD}_{YYYY}_{HH}_{MM}_{SS}mic{X}hour{Y}.wav
     """
 
-    def __init__(self, file_path: str) -> None:
+    def __init__(self, file_path: str, name: str) -> None:
         super().__init__()
         self._file_path = file_path
+        self._name = name
         self._stopped = False
         self.stop_recording = False
 
-        filename = os.path.basename(file_path)
-        self._status = MultilineTextView(0, 0, text=f"Play+Rec\n{filename[:14]}", anchor=TextAnchor.LEFT_TOP)
+        self._status = MultilineTextView(0, 0, text=f"Play+Rec\n{name[:14]}", anchor=TextAnchor.LEFT_TOP)
         self._status.selectable = False
         self.view.add_subview(self._status)
 
@@ -75,6 +74,8 @@ class PlayAndRecordViewController(ViewController[None]):
         def _play():
             try:
                 data, sr = sf.read(self._file_path)
+                if self._stopped:
+                    return
                 sd.play(data, sr)
                 sd.wait()
             except Exception as e:
@@ -95,9 +96,8 @@ class PlayAndRecordViewController(ViewController[None]):
         actual_time = total_duration
         duration = min(actual_time, MAX_FILE_RECORD_TIME)
 
-        now = datetime.now()
-        date_str = now.strftime("%m_%d_%Y_%H_%M_%S")
-        file_prefix = f"rec_{date_str}"
+        date_str = datetime.now().strftime("%m%d_%H%M%S")
+        file_prefix = f"playback_{self._name}_{date_str}"
 
         num_channels = 1
         sample_rate = 44100
@@ -113,19 +113,22 @@ class PlayAndRecordViewController(ViewController[None]):
                 if len(mic_ids) == 3:
                     break
 
-        def record(mic_id, mic_idx, hour, q):
+        def record(mic_id, mic_idx, q):
             def callback(indata, frames, time_, status):
                 if status:
                     print(status, file=sys.stderr)
                 q.put(indata.copy())
-            file_path = f"{get_recordings_path()}/{file_prefix}mic{mic_idx}hour{hour}.wav"
+            file_path = f"{get_recordings_path()}/{file_prefix}_mic{mic_idx}.wav"
             with sf.SoundFile(file_path, mode='x', samplerate=sample_rate,
                               channels=num_channels, subtype='PCM_24') as wav_f:
                 with sd.InputStream(samplerate=sample_rate, blocksize=750, device=mic_id,
                                     channels=num_channels, callback=callback):
                     t0 = time.time()
                     while time.time() - t0 < duration and not self.stop_recording:
-                        wav_f.write(q.get())
+                        try:
+                            wav_f.write(q.get(timeout=0.5))
+                        except queue.Empty:
+                            pass
 
         def countdown(total):
             remaining = total
@@ -133,15 +136,11 @@ class PlayAndRecordViewController(ViewController[None]):
                 self._status.text = f"Play+Rec\n{get_duration_text(remaining)} left"
                 if remaining == 0:
                     return
-                elif remaining <= 60:
+                else:
                     time.sleep(1)
                     remaining -= 1
-                else:
-                    time.sleep(60)
-                    remaining -= 60
 
         from TimeUtils import get_duration_text
-        rec_cnt = 0
         cnt_thread = threading.Thread(target=countdown, args=[actual_time], daemon=True)
         cnt_thread.start()
 
@@ -149,7 +148,7 @@ class PlayAndRecordViewController(ViewController[None]):
             mic_threads = []
             for i in range(len(mic_ids)):
                 q = queue.Queue()
-                t = threading.Thread(target=record, args=[mic_ids[i], mic_indices[i], rec_cnt, q])
+                t = threading.Thread(target=record, args=[mic_ids[i], mic_indices[i], q])
                 mic_threads.append(t)
             for t in mic_threads:
                 t.start()
@@ -158,7 +157,6 @@ class PlayAndRecordViewController(ViewController[None]):
             if self.stop_recording:
                 break
             actual_time -= duration
-            rec_cnt += 1
             if duration > actual_time:
                 duration = actual_time
 
@@ -169,10 +167,8 @@ class PlayAndRecordViewController(ViewController[None]):
     def on_key2_press(self) -> None:
         self._stopped = True
         self.stop_recording = True
-        sd.stop()
         self._status.text = "Stopping..."
 
     def on_disappear(self) -> None:
         self._stopped = True
         self.stop_recording = True
-        sd.stop()

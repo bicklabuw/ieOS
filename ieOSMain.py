@@ -1,5 +1,4 @@
 import time
-from datetime import datetime
 
 import Main
 from TitleViewController import TitleViewController
@@ -20,13 +19,10 @@ class StartupViewController(TitleViewController):
             return
         self._setup_done = True
         time.sleep(STARTUP_DURATION)
-        if datetime.now().year < 2024:
-            self.push_view_controller(
-                SystemTime(),
-                return_callback=lambda _: self.swap_view_controller(MainMenuViewController()),
-            )
-        else:
-            self.swap_view_controller(MainMenuViewController())
+        self.push_view_controller(
+            SystemTime(),
+            return_callback=lambda _: self.swap_view_controller(MainMenuViewController()),
+        )
 
 
 if __name__ == "__main__":
