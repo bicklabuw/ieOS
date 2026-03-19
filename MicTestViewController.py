@@ -1,149 +1,199 @@
-import sounddevice as sd
-import numpy as np
+from __future__ import annotations
+
 import queue
 import threading
+import time
+
+import numpy as np
+import sounddevice as sd
+
+import Display
+import Main
+from Display import SCREEN_HEIGHT, SCREEN_WIDTH
+from PIL import ImageDraw, ImageFont
 from ViewController import ViewController
-from ControlView import ControlView
+from Views import CoordinateView
 
-from typing import List, Union
+# ---------------------------------------------------------------------------
+# Layout constants
+# ---------------------------------------------------------------------------
+_BAR_TOP    = 2
+_BAR_BOTTOM = 52
+_BAR_H      = _BAR_BOTTOM - _BAR_TOP   # 52 usable px
+_HINT_Y     = 54
 
-from Components import RectangleComponent, TextComponent
+# Fixed bar geometry per mic count: (bar_w, gap, left_margin)
+_BAR_GEOMETRY = {
+    1: (60,  0, 34),
+    2: (44, 16, 14),
+    3: (30,  9, 10),
+}
 
-class MicTestViewController(ViewController):
-    def __init__(self):
+_BLOCKSIZE = 512   # small block = low latency (~12ms at 44100Hz)
+
+
+class _MicCheckView(CoordinateView):
+    """Single full-screen view that draws the entire mic check UI.
+
+    Draws title, bars, status, and hint all in one _render_self so there
+    is no z-order overlap between subviews.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.selectable = False
+        self._font = ImageFont.load_default()
+
+        self._n: int = 0
+        self._amplitude: list[float] = []
+        self._peak: list[int] = []
+        self._peak_hold_frames: list[int] = []
+        self._status_text: str = ""
+        self._hint_text: str = ""
+
+    def setup(self, n: int, status: str, hint: str) -> None:
+        self._n = n
+        self._amplitude = [0.0] * n
+        self._peak = [0] * n
+        self._peak_hold_frames = [0] * n
+        self._status_text = status
+        self._hint_text = hint
+        self._mark_dirty()
+
+    def set_texts(self, status: str, hint: str) -> None:
+        self._status_text = status
+        self._hint_text = hint
+        self._mark_dirty()
+
+    def update_amplitude(self, mic_idx: int, amp: float) -> None:
+        bar_h = max(0, min(_BAR_H, int(amp * _BAR_H)))
+        if bar_h >= self._peak[mic_idx]:
+            self._peak[mic_idx] = bar_h
+            self._peak_hold_frames[mic_idx] = 7
+        elif self._peak_hold_frames[mic_idx] > 0:
+            self._peak_hold_frames[mic_idx] -= 1
+        else:
+            self._peak[mic_idx] = max(0, self._peak[mic_idx] - 1)
+        self._amplitude[mic_idx] = amp
+        self._mark_dirty()
+
+    def _render_self(self, draw: ImageDraw.ImageDraw) -> None:
+        font = self._font
+
+        if self._n > 0:
+            # --- Bars ---
+            bar_w, gap, left_margin = _BAR_GEOMETRY.get(self._n, _BAR_GEOMETRY[3])
+            for i in range(self._n):
+                x0 = left_margin + i * (bar_w + gap)
+                x1 = x0 + bar_w - 1
+
+                # Outline shell
+                draw.rectangle([x0, _BAR_TOP, x1, _BAR_BOTTOM],
+                                fill=Display.OFF, outline=Display.ON)
+
+                # Amplitude fill
+                bh = max(0, min(_BAR_H, int(self._amplitude[i] * _BAR_H)))
+                if bh > 0:
+                    draw.rectangle([x0, _BAR_BOTTOM - bh, x1, _BAR_BOTTOM],
+                                   fill=Display.ON)
+
+                # Peak-hold line
+                pk = self._peak[i]
+                if pk > bh + 1:
+                    py = _BAR_BOTTOM - pk
+                    draw.line([(x0, py), (x1, py)], fill=Display.ON, width=1)
+        else:
+            # --- No mics ---
+            msg = self._status_text
+            mb = draw.textbbox((0, 0), msg, font=font)
+            draw.text(((SCREEN_WIDTH - (mb[2] - mb[0])) / 2,
+                       (SCREEN_HEIGHT - (mb[3] - mb[1])) / 2 - 5),
+                      msg, fill=Display.ON, font=font)
+
+        # --- Hint ---
+        if self._hint_text:
+            hb = draw.textbbox((0, 0), self._hint_text, font=font)
+            draw.text((SCREEN_WIDTH - (hb[2] - hb[0]) - 2, _HINT_Y),
+                      self._hint_text, fill=Display.ON, font=font)
+
+
+class MicTestViewController(ViewController[bool]):
+
+    def __init__(self, show_go: bool = False) -> None:
         super().__init__()
-        self.view = MicTestView()
-
-        self._queues = [] # Queue to hold audio data for each microphone
-        self.SCREEN_UPDATE_DELAY = 0.1 # Minimum Time between subsequent updates of the display
-        self.BUFFER_SIZE = 750 # Size of the buffer to read from the InputStream
-        self.THRESHOLD = 0.05 # Threshold for Tap
-
+        self._show_go = show_go
         self._stop = False
+        self._streams: list = []
+        self._queues: list[queue.Queue] = []
 
-        self.present_view(self.view)
+        self._view = _MicCheckView()
+        self.view.add_subview(self._view)
 
-    def on_right_press(self):
-        self.pop_view_controller()
-
-    def stop(self):
-        self._stop = True
-
-    def on_disappear(self):
-        self.stop()
-
-    def _audio_callback(self, indata, frames, time, status, index):
-        if status:
-            print(f"Status for mic {index}: {status}")
-        self._queues[index].put(indata.copy())
-
-    def _detect_spike(self, mic_index):
-        while not self._stop:
-            data = self._queues[mic_index].get()
-            amplitude = np.max(np.abs(data))
-            if amplitude > self.THRESHOLD:
-                print("Mic " + str(mic_index) + ": " + str(amplitude))
-                print(f"Spike detected in microphone {mic_index}")
-                self.view.update_mic_tapped(mic_index)
-            # Update the display with the current amplitude
-            self.view.update_mic_amplitude(mic_index, amplitude)
-
-    def on_appear(self):
-        # Query all audio devices and initialize queues and streams
+    def on_appear(self) -> None:
+        super().on_appear()
         devices = sd.query_devices()
-        
-        mic_ids = []
-        self._mic_indices = []
+        mics = [d for d in devices
+                if d["name"].startswith("USB") and d["max_input_channels"] > 0][:3]
 
-        for i, d in enumerate(devices):
-            name = d["name"]
-            if d['max_input_channels'] > 0 and name.startswith("USB"):
-                mic_ids.append(i)
-                self._mic_indices.append(name[name.index("hw:")+3 : name.index(",")])
-        
-        self._queues = [queue.Queue() for _ in mic_ids]
+        if not mics:
+            self._view.setup(0, "No mics found", "K2: BACK")
+            return
 
-        # List of InputStream objects
-        streams = []
-        for i in range(len(mic_ids)):
-            index = mic_ids[i]
+        n = len(mics)
+        hint = "K2: BACK  K3: GO" if self._show_go else "K2: BACK"
+        self._view.setup(n, f"{n} mic{'s' if n != 1 else ''} found", hint)
+
+        self._queues = [queue.Queue() for _ in mics]
+        self._stop = False
+        self._streams = []
+
+        for i, d in enumerate(mics):
+            def _cb(indata, frames, t, status, _i=i):
+                if not self._stop:
+                    self._queues[_i].put(indata.copy())
 
             stream = sd.InputStream(
-                device=index,
-                channels=1,  # Assuming each mic is mono
-                callback=lambda indata, frames, time, status, index=i: self._audio_callback(indata, frames, time, status, index),
-                blocksize=self.BUFFER_SIZE
+                device=d["index"],
+                channels=1,
+                blocksize=_BLOCKSIZE,
+                callback=_cb,
             )
-            streams.append(stream)
-
-        # Start all InputStreams
-        for stream in streams:
             stream.start()
+            self._streams.append(stream)
 
-        # Set stop to false
-        self._stop = False
+        threading.Thread(target=self._process_audio, daemon=True).start()
 
-        # Set last tapped id to None
-        self.view.update_mic_tapped(None)
+    def _process_audio(self) -> None:
+        while not self._stop:
+            for i, q in enumerate(self._queues):
+                try:
+                    data = q.get_nowait()
+                    self._view.update_amplitude(i, float(np.max(np.abs(data))))
+                except queue.Empty:
+                    pass
+            time.sleep(0.05)
 
-        # Start spike detection threads
-        threads = []
-        for index in range(len(mic_ids)):
-            thread = threading.Thread(target=self._detect_spike, args=(index,))
-            thread.daemon = True
-            thread.start()
-            threads.append(thread)
+    def _stop_all(self) -> None:
+        self._stop = True
+        for stream in self._streams:
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass
+        self._streams = []
 
-        # Wait until stopped
-        for i in mic_ids:
-            threads[i].join()
-            streams[i].close()
+    def on_key2_press(self) -> None:
+        self._stop_all()
+        self.pop_view_controller(None)
 
-class MicTestView(ControlView):
-    DEF_BAR_WIDTH = 5
-    DEF_BAR_ID_SPACE = 3
-    
-    def __init__(self, mic_indices: List[int], bar_width: int = DEF_BAR_WIDTH, bar_id_space: int = DEF_BAR_ID_SPACE):
-        super().__init__(uses_keys_inp=False, right_text="Back")
-        self._num_mics = len(mic_indices)
-        self._mic_indices = mic_indices
-        self._mic_components = [RectangleComponent(0,0,0,0) for _ in self._mic_indices]
+    def on_key3_press(self) -> None:
+        self._stop_all()
+        self.pop_view_controller(True if self._show_go else None)
 
-        self.CHAR_WIDTH, self.CHAR_HEIGHT = TextComponent.get_text_size_of("0", spacing=self.LINE_SPACING)
+    def on_disappear(self) -> None:
+        self._stop_all()
 
-        self._mic_name_components = [TextComponent(((idx + 0.5) * self._width / self._num_mics) + self._start_x - (self.CHAR_HEIGHT / 2),
-                                                  self.SCREEN_HEIGHT - self.CHAR_WIDTH,str(idx)) for idx in self._mic_indices]
-        self._mic_tapped_component = TextComponent(0, 0, "")
-        
-        self.bar_width = bar_width # Width of each mic bar on the screen
-        self.bar_id_space = bar_id_space # Vertical Space (in pixels) between the Audio Bar and the ID Text
 
-        self.add_components(self._mic_name_components)
-        self.add_components(self._mic_components)
-        self.add_component(self._mic_tapped_component)
-
-        # Draw controls on image and get the view's frame (x, width)
-        self._draw_controls_and_get_frame()
-
-    def update_mic_tapped(self, mic_index: Union[int, None]):
-        if mic_index is not None:
-            tapped_text = "Mic Tapped: " + str(self._mic_indices[mic_index])
-            tapped_text_width = self._get_text_width(tapped_text)
-            self._mic_tapped_component.text = tapped_text
-            self._mic_tapped_component.set_coordinate(((self._width - tapped_text_width) / 2) + self._start_x, 0)
-        else:
-            self._mic_tapped_component.text = ""
-            self._mic_tapped_component.set_coordinate(0, 0)
-
-    def update_mic_amplitude(self, mic_index, amplitude):
-        rect_y = self.SCREEN_HEIGHT - self.CHAR_HEIGHT - self.bar_id_space
-        rect_max_height = rect_y - self.CHAR_HEIGHT
-        rect_start_x = ((mic_index + 0.5) * self._width / self._num_mics) - (self.bar_width / 2) + self._start_x
-        self._mic_components[mic_index].set_rect(rect_start_x, rect_y - int(amplitude*rect_max_height), rect_start_x + self.bar_width, rect_y)
-
-    def _draw_controls_and_get_frame(self):
-        # Draw controls on image (and get our View's start and end x as well as width)
-        self._start_x, self._end_x = self.draw_controls_on_image(self.__draw)
-        self._width = self._end_x - self._start_x
-
-    
+if __name__ == "__main__":
+    Main.main(MicTestViewController(show_go=True))

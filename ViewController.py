@@ -68,7 +68,7 @@ class ViewController(Generic[T]):
             InputCode.UP, InputCode.DOWN,
             InputCode.LEFT, InputCode.RIGHT
         ):
-            print("Attempting toi move")
+            print("Attempting to move")
             if self.selection.move(Direction.from_code(code)):
                 return
             self.handle_wrap(code)
@@ -115,11 +115,11 @@ class ViewController(Generic[T]):
         """
         Pop the top controller.  If it was pushed with a callback, pass `return_data` back.
         """
-        if hasattr(self, '_return_callback'):
-            self._return_callback(return_data)
         t = ViewControllerTransition(None, ViewControllerTransitionType.POP)
         print(f"Pop view controller: {t}")
         put_view_controller_transition(t)
+        if hasattr(self, '_return_callback'):
+            self._return_callback(return_data)
 
     def pop_to_root_view_controller(self) -> None:
         """Pop back to the initial/root controller."""
@@ -146,6 +146,11 @@ class ViewController(Generic[T]):
         if parent == self.selection.current_parent and self.selection.current is None:
             print(f"Adding selectable view to current parent: {parent}")
             self.selection._enter(0)
+    
+    def select(self, view: View) -> None:
+        self.selection.select(view)
+
+    
     
 class ViewControllerTransition:
     def __init__(self, vc: ViewController, vc_transition_type: ViewControllerTransitionType):

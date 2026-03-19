@@ -1,40 +1,33 @@
-from Main import main
-from OSGlobals import OSVersion
-from ViewController import ViewController
-from RecordSetupViewController import RecordSetupViewController
+import time
+from datetime import datetime
 
-STARTUP_TITLE_TEXT = "Insect Eavesdropper"
-STARTUP_SUBTITLE_TEXT = "Version: " + OSVersion
+import Main
+from TitleViewController import TitleViewController
+from MainMenuViewController import MainMenuViewController
+from SystemTime import SystemTime
+
 STARTUP_DURATION = 3  # seconds
-STARTING_VIEW_CONTROLLER = RecordSetupViewController
 
-DEFAULT_STARTUP_DURATION = STARTUP_DURATION  # seconds
+
+class StartupViewController(TitleViewController):
+    def __init__(self) -> None:
+        super().__init__("Insect Eavesdropper")
+        self._setup_done = False
+
+    def on_appear(self) -> None:
+        super().on_appear()
+        if self._setup_done:
+            return
+        self._setup_done = True
+        time.sleep(STARTUP_DURATION)
+        if datetime.now().year < 2024:
+            self.push_view_controller(
+                SystemTime(),
+                return_callback=lambda _: self.swap_view_controller(MainMenuViewController()),
+            )
+        else:
+            self.swap_view_controller(MainMenuViewController())
+
 
 if __name__ == "__main__":
-    # Create the startup view controller
-    startup_vc = StartupViewController(
-        starting_vc=STARTING_VIEW_CONTROLLER(),
-        title=STARTUP_TITLE_TEXT,
-        subtitle=STARTUP_SUBTITLE_TEXT,
-        on_screen_sec=DEFAULT_STARTUP_DURATION
-    )
-
-    Main.main(startup_vc)
-
-def StartupViewController(ViewController):
-    def __init__(self, starting_vc: ViewController, title: str, subtitle: str, 
-                 on_screen_sec: int = DEFAULT_STARTUP_DURATION):
-        super().__init__()
-
-        self.starting_vc = starting_vc
-        self.on_screen_sec = on_screen_sec
-        
-        self.view = TitleView()
-        self.view.text = title
-        #self.view.title_text = title
-        #self.view.subtitle_text = subtitle
-        self.present_view(self.view)
-
-    def on_appear(self):
-        time.sleep(self.on_screen_sec)
-        self.change_view_controller(self.starting_vc, ChangeViewControllerType.CLEAR)
+    Main.main(StartupViewController())

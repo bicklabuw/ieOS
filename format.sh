@@ -42,6 +42,10 @@ sudo parted -s "$DEVICE" mklabel msdos
 sudo parted -s "$DEVICE" mkpart primary fat32 1MiB 100%
 sudo mkfs.vfat -F 32 "${DEVICE}1"
 
+# Wait for kernel to register the new partition
+sudo partprobe "$DEVICE"
+sudo udevadm settle
+
 # Set the label
 echo "Setting label to 'Pendrive'..."
 sudo fatlabel "${DEVICE}1" Pendrive

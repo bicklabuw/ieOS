@@ -1,189 +1,174 @@
 import sounddevice as sd
-import threading
 import soundfile as sf
 from datetime import datetime
 import time
-# import numpy  # Make sure NumPy is loaded before it is used in the callback
-# assert numpy  #
+import threading
 import queue
 import sys
-import os
+
+import numpy as np
+
 import Display
-
 from ViewController import ViewController
-
-from TitleView import TitleView
-from ControlView import ControlView
-from MicTestViewController import MicTestView
-
+from Views import MultilineTextView, TextView, TextAnchor
+from Display import SCREEN_WIDTH, SCREEN_HEIGHT
+from USBDriveManager import mount_pendrive, unmount_pendrive, create_recordings_dir, get_recordings_path
 from TimeUtils import get_duration_text
 
-from USBDriveManager import is_pendrive_connected, create_recordings_dir
+MAX_FILE_RECORD_TIME = 3600  # 1 hour per file segment
 
-# Constants
-MAX_FILE_RECORD_TIME = 3600 # 1 hr
 
-error_view = TitleView()
-mic_test_view = MicTestView()
-
-class RecordViewController(ViewController):
-    def __init__(self, rec_duration: int):
-        self.rec_duration = rec_duration
+class RecordViewController(ViewController[None]):
+    def __init__(self, name: str, duration: int) -> None:
+        super().__init__()
+        self._name = name
+        self._duration = duration
         self.stop_recording = False
 
-        self.view = ControlView()
-        self.view.key2_text = "Stop"
+        self._status = MultilineTextView(0, 0, text="", anchor=TextAnchor.LEFT_TOP)
+        self._status.selectable = False
+        self.view.add_subview(self._status)
 
-        self.present_view(self.view)
+        self._hint = TextView(0, 0, text="K2: STOP", anchor=TextAnchor.LEFT_TOP)
+        self._hint.selectable = False
+        self.view.add_subview(self._hint)
 
-    def start(self):
+    def on_layout(self) -> None:
+        sw, sh = self._status.get_text_size()
+        self._status.x = max(0, (SCREEN_WIDTH - sw) / 2)
+        self._status.y = max(0, (SCREEN_HEIGHT - sh) / 2)
+
+        hw, hh = self._hint.get_text_size()
+        self._hint.x = (SCREEN_WIDTH - hw) / 2
+        self._hint.y = SCREEN_HEIGHT - hh - 2
+
+    def on_appear(self) -> None:
+        super().on_appear()
+
+        # 1. Mount pendrive
+        try:
+            mount_pendrive()
+        except OSError as e:
+            self._status.text = f"No USB drive:\n{e}"
+            time.sleep(2)
+            self.pop_view_controller()
+            return
+
+        # 2. Create recordings directory
+        try:
+            create_recordings_dir()
+        except OSError as e:
+            unmount_pendrive()
+            self._status.text = f"Dir error:\n{e}"
+            time.sleep(2)
+            self.pop_view_controller()
+            return
+
+        # 3. Reset stop flag
         self.stop_recording = False
-        
-        actual_time = self.rec_duration
-        duration = actual_time
-        if(actual_time > MAX_FILE_RECORD_TIME):
-            duration = MAX_FILE_RECORD_TIME
 
+        # 4. Run recording (blocks until done)
+        self._run_recording()
+
+        # 5. Unmount and pop
+        unmount_pendrive()
+        self.pop_view_controller()
+
+    def _run_recording(self) -> None:
+        indefinite = self._duration == 0
         now = datetime.now()
-        date_time = now.strftime("_%m_%d_%Y_%H_%M_%S")
+        date_str = now.strftime("%m_%d_%Y_%H_%M_%S")
+        file_prefix = f"{self._name}_{date_str}"
 
-        file_name = "Pi1"+date_time
-        file_paths_to_upload = []
-        #setduration of each rec in seconds, each file will be this duration
-        ##SAve
-        ##SAve
-        # define the number of channels and sample rate for the audio recording
-        
+        # Detect USB mics (up to 3)
+        devices = sd.query_devices()
+        mic_ids = []
+        mic_indices = []
+        for d in devices:
+            name = d['name']
+            if name.startswith("USB") and d['max_input_channels'] > 0:
+                mic_ids.append(d['index'])
+                mic_indices.append(name[name.index("hw:") + 3 : name.index(",")])
+                if len(mic_ids) == 3:
+                    break
+
         num_channels = 1
         sample_rate = 44100
-        devices = sd.query_devices()
-        print(devices)
-        mic_indices = []
-        mic_ids = []
-        for i in devices:
-            name = i["name"]
-            if i['max_input_channels'] > 0 and name.startswith("USB"):
-                mic_ids.append(i['index'])
-                mic_indices.append(name[name.index("hw:")+3 : name.index(",")])
-        
-        print("IDs:")
-        print(mic_ids)
-        print("Indices: ")
-        print(mic_indices)
-            
-        # start recording audio from the selected microphones
-        def record(id,index,rectime,q):
-            global PENDRIVE_RECORDINGS_PATH
-            def callback(indata, frames, time, status):
-                if status:
-                    print(frames)
-                    print("ERROR: ")
-                    print(status, file=sys.stderr)
+        segment_duration = MAX_FILE_RECORD_TIME
+
+        def record(id, index, hour, q):
+            def callback(indata, frames, time_, status):
                 q.put(indata.copy())
-    #   sd.wait()
-        #setfilename
-            file_path = f"{PENDRIVE_RECORDINGS_PATH}/{file_name}mic{index}hour{rectime}.wav" #+ AUDIO_TYPE.name  # name the file based on the microphone number
-    #   sf.write(file_name, recording, sample_rate)
-    #    gc.collect()
-            with sf.SoundFile(file_path, mode='x', samplerate=sample_rate,
-                        channels=num_channels, subtype='PCM_24') as file:
-                file_paths_to_upload.append(file_path)
-                with sd.InputStream(samplerate=sample_rate, blocksize=750, device=id,
-                                channels=num_channels, callback=callback):
-                    start_time = time.time()
-                    while time.time() - start_time < duration and not self.stop_recording:
-                        file.write(q.get())
-            
-            print("Done" + date_time)
-            
-        def count_down(cnt_time):
-            '''
-            cnt_time to count down from in seconds
-            '''
-            while cnt_time >= 0 and not self.stop_recording and threading.current_thread() is cnt_thread:
-                time_str = "time left:\n" + get_duration_text(cnt_time)
-                
-                self.view.view_text = time_str
-                # view_controller.redraw()
-                
-                #print(f"{mins % 60}" if mins > 0 else "")
-                #print(f"Mins: {mins}")
-                #print(f"Secs: {secs}")
-                #print(time_str)
-                
-                if cnt_time == 0:
+            file_path = f"{get_recordings_path()}/{file_prefix}mic{index}hour{hour}.wav"
+            try:
+                with sf.SoundFile(file_path, mode='x', samplerate=sample_rate, channels=num_channels, subtype='PCM_24') as f:
+                    with sd.InputStream(samplerate=sample_rate, blocksize=750, device=id, channels=num_channels, callback=callback):
+                        t0 = time.time()
+                        while time.time() - t0 < segment_duration and not self.stop_recording:
+                            f.write(q.get())
+            except Exception as e:
+                self._status.text = f"Error:\n{e}"
+                self.stop_recording = True
+
+        def countdown_indefinite():
+            while not self.stop_recording and threading.current_thread() is cnt_thread:
+                self._status.text = "Recording..."
+                time.sleep(1)
+
+        def countdown_timed(total):
+            remaining = total
+            while remaining >= 0 and not self.stop_recording and threading.current_thread() is cnt_thread:
+                self._status.text = f"Recording...\n{get_duration_text(remaining)} left"
+                if remaining == 0:
                     return
-                elif cnt_time <= 60:
+                elif remaining <= 60:
                     time.sleep(1)
-                    cnt_time -= 1
+                    remaining -= 1
                 else:
                     time.sleep(60)
-                    cnt_time -= 60
-            
-                print("HI - WE'RE DONE")
-                print(threading.current_thread())
-                print("CNT TIME: " + str(cnt_time))
+                    remaining -= 60
 
         rec_cnt = 0
-        
-        # Add count down thread
-        cnt_thread = threading.Thread(target=count_down, args=[actual_time])
+        if indefinite:
+            cnt_thread = threading.Thread(target=countdown_indefinite, daemon=True)
+        else:
+            cnt_thread = threading.Thread(target=countdown_timed, args=[self._duration], daemon=True)
         cnt_thread.start()
-        while actual_time > 0:
+
+        remaining_time = self._duration if not indefinite else None
+        while indefinite or remaining_time > 0:
+            seg = segment_duration if indefinite else min(remaining_time, segment_duration)
+            segment_duration = seg  # used by record() closure
+
             mic_threads = []
-            for i in range(len(mic_ids)):
+            for mic_id, mic_index in zip(mic_ids, mic_indices):
                 q = queue.Queue()
-                t = threading.Thread(target=record,args=[mic_ids[i],mic_indices[i],rec_cnt,q])
+                t = threading.Thread(
+                    target=record,
+                    args=(mic_id, mic_index, rec_cnt, q),
+                    daemon=True,
+                )
                 mic_threads.append(t)
-            
-            # wait for the recording to finish
-            print(len(mic_threads))
-            for i in mic_threads:
-                i.start()
-                
-            for i in mic_threads:
-                i.join()
+                t.start()
+
+            for t in mic_threads:
+                t.join()
 
             if self.stop_recording:
                 break
-            
-            actual_time -= duration
+
             rec_cnt += 1
-            
-            if duration > actual_time:
-                duration = actual_time
-        
-        # If stopping don't wait for counter to get out of sleep (could take a minute)
-        # Instead let it finish later - where it should just instantly stop
+            if not indefinite:
+                remaining_time -= seg
+
         cnt_thread.join(0.5 if self.stop_recording else None)
-
-        # Show done and then present select view again
-        self.view.key_controls_en = False
-        self.view.view_text = "Stopped" if self.stop_recording else "Done!"
-        # view_controller.redraw()
-        
+        self._status.text = "Stopped" if self.stop_recording else "Done!"
         time.sleep(1)
-        
-        self.view.key_controls_en = True
-        self.pop_view_controller()
 
-    def on_appear(self):
-        # Check if Pendrive is connected (if not display error text and try again)
-        while not is_pendrive_connected(PENDRIVE_MOUNT_POINT):
-            error_view.text = "Pendrive not Found"
-            self.present_view(error_view)
-            # Delay before checking again
-            time.sleep(1)
-
-        create_recordings_dir()
-        self.start()
-
-    def on_key2_press(self):
-        self.view.view_text = "Stopping"
-        self.view.key_controls_en = False
-
+    def on_key2_press(self) -> None:
+        self._status.text = "Stopping..."
         self.stop_recording = True
+        # Do NOT call pop_view_controller here — on_appear handles it
 
-    def on_disappear(self):
-        # On disappear stop all threads
+    def on_disappear(self) -> None:
         self.stop_recording = True

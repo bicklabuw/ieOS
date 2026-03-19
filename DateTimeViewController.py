@@ -57,6 +57,11 @@ class InputState(Enum):
 MARGIN_LEFT = 40
 MARGIN_TOP = 25
 
+# Arrow dimensions for NumberInputView selection indicators
+ARROW_SIZE = 5
+ARROW_GAP = 2
+ARROW_PADDING = ARROW_SIZE + ARROW_GAP  # total space reserved above/below the box
+
 
 class NumberInputView(CoordinateView):
     def __init__(
@@ -90,6 +95,7 @@ class NumberInputView(CoordinateView):
         self.max_value = max_value
         self.enabled = enabled
         self.value = value
+        self.outline_y = ARROW_PADDING
         self._refresh_display_text()
 
     def _format_value_text(self) -> str:
@@ -101,16 +107,32 @@ class NumberInputView(CoordinateView):
         self.gui.text = self._format_value_text()
         tw, th = self.gui.get_text_size()
         self.gui.x = (self.width - tw) / 2
-        self.gui.y = (self.height - th) / 2
+        self.gui.y = self.outline_y + (self.height - th) / 2
         self.gui.fill = Display.OFF if self.selected else Display.ON
 
     def _render_self(self, draw: ImageDraw.ImageDraw) -> None:
+        box_top = self.outline_y
         draw.rectangle(
-            [0, 0, self.width - 1, self.height - 1],
+            [0, box_top, self.width - 1, box_top + self.height - 1],
             outline=Display.ON,
             fill=Display.ON if self.selected else Display.OFF,
             width=1
         )
+        if self.selected and self.enabled:
+            cx = self.width / 2
+            # Up arrow above the box
+            draw.polygon([
+                (cx, ARROW_GAP),
+                (cx - ARROW_SIZE / 2, box_top),
+                (cx + ARROW_SIZE / 2, box_top)
+            ], fill=Display.ON)
+            # Down arrow below the box
+            below = box_top + self.height
+            draw.polygon([
+                (cx, below + ARROW_SIZE),
+                (cx - ARROW_SIZE / 2, below),
+                (cx + ARROW_SIZE / 2, below)
+            ], fill=Display.ON)
 
     def on_select(self) -> None:
         super().on_select()
@@ -174,17 +196,8 @@ class IndexToStringMappingInputView(NumberInputView):
         return True
 
 class TimeInputView(View):
-    def __init__(self, x=0, y=0, width=Display.SCREEN_WIDTH, height=Display.SCREEN_HEIGHT):
+    def __init__(self, x=0, y=0, width=Display.SCREEN_WIDTH, height=Display.SCREEN_HEIGHT, hint_text="BTN: DONE"):
         super().__init__(x=x, y=y, width=width, height=height)
-        self.label = MultilineTextView(
-            x=0,
-            y=0,
-            text="Set time",
-            anchor=TextAnchor.LEFT_ASCENDER,
-            align=TextAlignment.CENTER
-        )
-        self.label.fill = Display.ON
-        self.label.selectable = False
         self.row_y = 0
         self.row_spacing = 7
 
@@ -200,21 +213,30 @@ class TimeInputView(View):
         self.hud = TextView(x=0, y=0, text="HRS    MIN    SEC", anchor=TextAnchor.LEFT_TOP, fill=Display.ON)
         self.hud.selectable = False
 
-        self.add_subview(self.label)
+        _circle_r = 4
+        self.hint_circle = CircleView(x=0, y=0, radius=_circle_r)
+        self.hint_circle.selectable = False
+        self.hint_label = TextView(x=0, y=0, text=hint_text.replace("BTN", ""), anchor=TextAnchor.LEFT_TOP, fill=Display.ON)
+        self.hint_label.selectable = False
+
         self.add_subview(self.sep_left)
         self.add_subview(self.sep_right)
         self.add_subview(self.hud)
+        self.add_subview(self.hint_circle)
+        self.add_subview(self.hint_label)
         self.add_subview(self.hours)
         self.add_subview(self.minutes)
         self.add_subview(self.seconds)
 
     def _layout(self, parent_abs_x=0, parent_abs_y=0):
         super()._layout(parent_abs_x, parent_abs_y)
-        title_w, title_h = self.label.get_text_size()
-        self.label.x = (self.width - title_w) / 2
-        self.label.y = 3
+        label_w, label_h = self.hint_label.get_text_size()
+        _, hud_h = self.hud.get_text_size()
 
-        self.row_y = title_h + 14
+        # total content height: top-arrow + box + bottom-arrow + gap + hud + gap + hint
+        content_h = ARROW_PADDING + self.hours.height + ARROW_SIZE + 4 + hud_h + 3 + label_h
+        self.row_y = max(2, (self.height - content_h) // 2)
+
         total_width = self.hours.width + self.minutes.width + self.seconds.width + (self.row_spacing * 2)
         row_x = (self.width - total_width) / 2
 
@@ -232,24 +254,24 @@ class TimeInputView(View):
 
         hud_w, _ = self.hud.get_text_size()
         self.hud.x = (self.width - hud_w) / 2
-        self.hud.y = self.row_y + self.hours.height + 4
+        self.hud.y = self.row_y + self.hours.height + ARROW_PADDING + 4
+
+        hint_gap = 3
+        hint_total_w = self.hint_circle.width + hint_gap + label_w
+        hint_x = (self.width - hint_total_w) / 2
+        hint_y = self.hud.y + hud_h + 3
+        self.hint_circle.x = hint_x
+        self.hint_circle.y = hint_y + (label_h - self.hint_circle.height) / 2
+        self.hint_label.x = hint_x + self.hint_circle.width + hint_gap
+        self.hint_label.y = hint_y
 
     def on_select(self):
         super().on_select()
         self.hours.select()
 
 class DateInputView(View):
-    def __init__(self, x=0, y=0, width=Display.SCREEN_WIDTH, height=Display.SCREEN_HEIGHT):
+    def __init__(self, x=0, y=0, width=Display.SCREEN_WIDTH, height=Display.SCREEN_HEIGHT, hint_text="BTN: NEXT"):
         super().__init__(x=x, y=y, width=width, height=height)
-        self.label = MultilineTextView(
-            x=0,
-            y=0,
-            text="Set date",
-            anchor=TextAnchor.LEFT_ASCENDER,
-            align=TextAlignment.CENTER
-        )
-        self.label.fill = Display.ON
-        self.label.selectable = False
         self.row_y = 0
         self.row_spacing = 7
 
@@ -261,19 +283,28 @@ class DateInputView(View):
         self.hud = TextView(x=0, y=0, text="DAY   MONTH   YEAR", anchor=TextAnchor.LEFT_TOP, fill=Display.ON)
         self.hud.selectable = False
 
-        self.add_subview(self.label)
+        _circle_r = 4
+        self.hint_circle = CircleView(x=0, y=0, radius=_circle_r)
+        self.hint_circle.selectable = False
+        self.hint_label = TextView(x=0, y=0, text=hint_text.replace("BTN", ""), anchor=TextAnchor.LEFT_TOP, fill=Display.ON)
+        self.hint_label.selectable = False
+
         self.add_subview(self.hud)
+        self.add_subview(self.hint_circle)
+        self.add_subview(self.hint_label)
         self.add_subview(self.day)
         self.add_subview(self.month)
         self.add_subview(self.year)
 
     def _layout(self, parent_abs_x=0, parent_abs_y=0):
         super()._layout(parent_abs_x, parent_abs_y)
-        title_w, title_h = self.label.get_text_size()
-        self.label.x = (self.width - title_w) / 2
-        self.label.y = 3
+        label_w, label_h = self.hint_label.get_text_size()
+        _, hud_h = self.hud.get_text_size()
 
-        self.row_y = title_h + 14
+        # total content height: top-arrow + box + bottom-arrow + gap + hud + gap + hint
+        content_h = ARROW_PADDING + self.day.height + ARROW_SIZE + 4 + hud_h + 3 + label_h
+        self.row_y = max(2, (self.height - content_h) // 2)
+
         total_width = self.day.width + self.month.width + self.year.width + (self.row_spacing * 2)
         row_x = (self.width - total_width) / 2
 
@@ -286,7 +317,16 @@ class DateInputView(View):
 
         hud_w, _ = self.hud.get_text_size()
         self.hud.x = (self.width - hud_w) / 2
-        self.hud.y = self.row_y + self.day.height + 4
+        self.hud.y = self.row_y + self.day.height + ARROW_PADDING + 4
+
+        hint_gap = 3
+        hint_total_w = self.hint_circle.width + hint_gap + label_w
+        hint_x = (self.width - hint_total_w) / 2
+        hint_y = self.hud.y + hud_h + 3
+        self.hint_circle.x = hint_x
+        self.hint_circle.y = hint_y + (label_h - self.hint_circle.height) / 2
+        self.hint_label.x = hint_x + self.hint_circle.width + hint_gap
+        self.hint_label.y = hint_y
 
     def on_select(self):
         super().on_select()
@@ -308,8 +348,9 @@ class DateTimeInputViewController(ViewController[datetime]):
         self.input_type = input_type
         self.state = self.DateTimeState.TIME if self.input_type == self.DateTimeInputType.TIME else self.DateTimeState.DATE
         
+        date_hint = "BTN: DONE" if input_type == self.DateTimeInputType.DATE else "BTN: NEXT"
         self.time_input_view = TimeInputView(x=self.view.x, y=self.view.y)
-        self.date_input_view = DateInputView(x=self.view.x, y=self.view.y)
+        self.date_input_view = DateInputView(x=self.view.x, y=self.view.y, hint_text=date_hint)
 
         if use_system_time:
             now = datetime.now()

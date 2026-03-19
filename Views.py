@@ -519,7 +519,7 @@ class MultilineTextView(CoordinateView):
             (0, 0), self.text,
             fill=self.fill,
             font=self.font,
-            anchor=self.anchor.to_pillow() if self.anchor else None,
+            anchor=None,
             spacing=self.spacing,
             align=self.align.value,
             direction=self.direction.value if self.direction else None,
@@ -534,9 +534,10 @@ class MultilineTextView(CoordinateView):
         """
         Returns the bounding box of the text.
         """
+        # PIL does not support anchor for multiline text
         bbox = (draw or Display.DEF_DRAW).textbbox((0, 0), self.text,
                   font=self.font,
-                  anchor=self.anchor.to_pillow() if self.anchor else None,
+                  anchor=None,
                   spacing=self.spacing,
                   align=self.align.value,
                   direction=self.direction.value if self.direction else None,

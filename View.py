@@ -87,10 +87,15 @@ class View:
         if subview.superview != None:
             raise RuntimeError("Adding Subview that currently has a Superview")
         subview.superview = self
-        subview.controller = self.controller
         self.subviews.append(subview)
+        
+        def add_vc_for_subviews(subview: View):
+            subview.controller = self.controller
+            for sv in subview.subviews:
+                add_vc_for_subviews(sv)
         #self._needs_layout = True
         #print("Added subview:", subview, "to", self)
+        add_vc_for_subviews(subview)
         self._mark_dirty()
 
         #print(self.controller)
@@ -275,6 +280,8 @@ class View:
             
             print(f"View selectable changed to {value} for {self}")
             self._mark_dirty()
+    def select(self) -> None:
+        self.controller.select(self)
 
 class ViewControllerView(View):
     def __init__(self, vc: ViewController, selectable: bool = True) -> None:

@@ -5,6 +5,7 @@ from typing import Optional
 from math import sqrt
 from enum import Enum
 from Display import SCREEN_HEIGHT, SCREEN_WIDTH
+from collections import deque
 
 class Direction(Enum):
     UP = InputCode.UP
@@ -25,9 +26,9 @@ class SelectionManager:
         wrap: bool = True
     ) -> None:
 
-        root.on_select()
+        
         root.manager = self
-
+        root.on_select()
         self._stack: list[View] = [root]
         self.wrap = wrap
         self._enter(0)
@@ -51,6 +52,62 @@ class SelectionManager:
             idx = len(siblings) - 1
         self.current = siblings[idx]
         self.current.on_select()
+        # if len(siblings) == 1:
+            # self.drill_in()
+    
+    def _enter_view(self, view: View) -> None:
+        if not issubclass(type(view), View):
+            raise TypeError(f"{view} is not a View")
+        if not view.selectable:
+            raise ValueError(f"View {view} is not selectable")
+        if view not in self._siblings():
+            raise ValueError(f"View {view} is not a sibling of current view {self.current}")
+        idx = self._siblings().index(view)
+        self._enter(idx)
+
+    def select(self, view: View) -> None:
+        """
+        select a view
+        figure out what i need to do to get there
+        """
+        if not issubclass(type(view), View):
+            raise TypeError(f"{view} is not a View")
+        if not view.selectable:
+            raise ValueError(f"View {view} is not selectable")
+        
+        view_stack = deque()
+        dummy_view = view
+        while dummy_view is not None:
+            view_stack.appendleft(dummy_view)
+            dummy_view = dummy_view.superview
+        
+        # check for root error
+        if view_stack[0] != self._stack[0]:
+            print("ERROR")
+            print(f"View stack to select {view}: {list(view_stack)}"
+                    f"\nCurrent stack: {self._stack}")
+            raise ValueError(f"View {view} is not a descendant of root view {self._stack[0]}")
+
+        n = min(len(view_stack), len(self._stack))
+        stop_index = n
+        for i in range(1, n):
+            if view_stack[i] != self._stack[i]:
+                stop_index = i
+                break
+
+        print(f"View stack to select {view}: {list(view_stack)}"
+              f"\nCurrent stack: {self._stack}\nStop index: {stop_index}")
+
+        self.current.on_deselect()
+        for _ in range(stop_index, len(self._stack)):
+            self.current = self._stack.pop()
+
+        if self.current != view_stack[stop_index]: 
+            self._enter_view(view_stack[stop_index])
+        
+        for i in range(stop_index+1, len(view_stack)):
+            print(self._siblings())
+            self.drill_in(view_stack[i])
 
     def _find_nearest(self, direction: Direction) -> Optional[int]:
         """
@@ -146,14 +203,16 @@ class SelectionManager:
         self.current.on_select()
         return True
 
-    def drill_in(self) -> None:
+    def drill_in(self, view: View | None = None) -> None:
         cur = self.current
         if not cur or not cur.subviews:
             return
         cur.on_deselect()
         self._stack.append(cur)
-        self.current = self.current.subviews[0]
-        self._enter(0)
+        if view is not None:
+            self._enter_view(view)
+        else:
+            self._enter(0)
 
     def handle_selected_view_being_removed(self, view: View) -> None:
         """
@@ -191,7 +250,7 @@ class SelectionManager:
         print(f"Selected view {view} removed, current is now {self.current}")
         print(f"INDEX: {ind}, SIBLINGS: {len(views)}")
 
-    def exit(self) -> None:
+    def exit(self,) -> None:
         if len(self._stack) <= 1:
             return
         cur = self.current
