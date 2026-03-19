@@ -1,2 +1,0 @@
-# Auto-mount disabled — ieOS mounts/unmounts manually at record/playback time.
-# To re-enable, restore the original RUN+= lines.
