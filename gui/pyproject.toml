@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "gui"
+version = "0.1.0"
+description = "Insect Eavesdropper OS GUI framework"
+requires-python = ">=3.9"
+dependencies = [
+    "Pillow",
+    "numpy",
+    "soundfile",
+    "sounddevice",
+    "pynput",
+    "pygame",
+    "gpiozero",
+]
+
+[project.optional-dependencies]
+rpi = [
+    "smbus",
+    "spidev",
+    "RPi.GPIO",
+    "lgpio",
+]
+
+[tool.setuptools.packages.find]
+where = [".."]
+include = ["gui*"]
