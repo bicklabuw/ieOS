@@ -1,0 +1,23 @@
+#+title: ieOS — Raspberry Pi setup
+
+* Install
+  #+begin_src bash
+  cd ~/ieos
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install -r gui/requirements.txt
+  pip install -r ieos/requirements.txt
+  #+end_src
+
+* Sudo (USB mount / unmount / ~blkid~, system time)
+  Run once after clone so the app can use ~sudo -n~ without a password prompt:
+  #+begin_src bash
+  cd ~/ieos
+  sudo bash scripts/pi-sudo-setup.sh
+  #+end_src
+
+* Run (from repo root)
+  #+begin_src bash
+  cd ~/ieos
+  ./ie.sh
+  #+end_src
