@@ -1,11 +1,41 @@
 import os
 import subprocess
+import time
 
 _DEFAULT_MOUNT_POINT = "/mnt/usb0"
 PENDRIVE_RECORDINGS_DIR = "/WAV"
 
 # Set by mount_pendrive(), cleared by unmount_pendrive()
 _active_mount_point: str | None = None
+
+# Mount / write retries (USB may appear a moment after plug-in)
+_DEFAULT_MOUNT_ATTEMPTS = 4
+_MOUNT_RETRY_DELAY_SEC = 0.45
+
+
+def _path_is_mounted(path: str) -> bool:
+    """True if path appears as a mount point in /proc/mounts."""
+    try:
+        with open("/proc/mounts") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2 and parts[1] == path:
+                    return True
+    except OSError:
+        pass
+    return False
+
+
+def refresh_mount_state() -> None:
+    """
+    Clear cached mount if the path is no longer mounted (e.g. drive unplugged).
+    Safe to call often.
+    """
+    global _active_mount_point
+    if _active_mount_point is None:
+        return
+    if not _path_is_mounted(_active_mount_point):
+        _active_mount_point = None
 
 
 def _find_usb_block_device() -> str | None:
@@ -55,9 +85,61 @@ def _get_mount_point(device: str) -> str | None:
 
 def get_recordings_path() -> str:
     """Return the path to the recordings directory on the mounted USB drive."""
+    refresh_mount_state()
     if _active_mount_point is None:
         raise OSError("USB drive not mounted")
     return _active_mount_point + PENDRIVE_RECORDINGS_DIR
+
+
+def _verify_dir_writable(dir_path: str) -> None:
+    """Raise OSError if we cannot create and delete a tiny test file."""
+    test = os.path.join(dir_path, ".ieos_write_test")
+    try:
+        with open(test, "wb") as f:
+            f.write(b"\x00")
+        os.remove(test)
+    except OSError as e:
+        raise OSError(f"USB storage not writable: {e}") from e
+
+
+def ensure_recordings_ready(
+    attempts: int = _DEFAULT_MOUNT_ATTEMPTS,
+    delay_sec: float = _MOUNT_RETRY_DELAY_SEC,
+) -> str:
+    """
+    Ensure USB is mounted and /WAV exists and is writable.
+
+    Retries on transient failures (drive just inserted, auto-mount racing).
+    Returns the full path to the recordings directory.
+    """
+    last_err: OSError | None = None
+    for i in range(attempts):
+        refresh_mount_state()
+        try:
+            mount_pendrive()
+            path = get_recordings_path()
+            create_recordings_dir()
+            _verify_dir_writable(path)
+            return path
+        except OSError as e:
+            last_err = e
+            if i + 1 < attempts:
+                time.sleep(delay_sec * (i + 1))
+    assert last_err is not None
+    raise last_err
+
+
+def assert_recordings_still_ready() -> str:
+    """
+    After refresh, confirm cached mount is still valid and folder is usable.
+    Call between long recording segments or after suspected unplug.
+    """
+    refresh_mount_state()
+    path = get_recordings_path()
+    if not os.path.isdir(path):
+        raise OSError("Recordings folder missing (USB may have been removed)")
+    _verify_dir_writable(path)
+    return path
 
 
 def mount_pendrive() -> None:
@@ -66,6 +148,8 @@ def mount_pendrive() -> None:
     mount point. Raises OSError if no USB drive is found or mount fails.
     """
     global _active_mount_point
+
+    refresh_mount_state()
 
     device = _find_usb_block_device()
     if not device:
@@ -99,15 +183,21 @@ def mount_pendrive() -> None:
 
 
 def unmount_pendrive() -> None:
-    """Unmount the USB drive. No-op if not mounted."""
+    """Flush buffers and unmount the USB drive. No-op if not mounted."""
     global _active_mount_point
     if _active_mount_point is None:
         return
-    subprocess.run(['sudo', 'umount', _active_mount_point], capture_output=True)
+    mp = _active_mount_point
+    try:
+        subprocess.run(["sync"], check=False, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    subprocess.run(["sudo", "umount", mp], capture_output=True)
     _active_mount_point = None
 
 
 def is_pendrive_mounted() -> bool:
+    refresh_mount_state()
     device = _find_usb_block_device()
     if not device:
         return False
