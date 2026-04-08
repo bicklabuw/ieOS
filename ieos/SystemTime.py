@@ -31,8 +31,13 @@ class SystemTimeViewController(ViewController[datetime]):
             self.pop_view_controller(None)
             return
         datetime_str = date.strftime("%Y-%m-%d %H:%M:%S")
-        set_system_time(datetime_str)
-        self.title.text = f"Time set:\n{datetime_str}"
+        # Update UI first so the screen never appears blank while setting system time.
+        self.title.text = f"Setting time...\n{datetime_str}"
+        ok, message = set_system_time(datetime_str)
+        if ok:
+            self.title.text = f"Time set:\n{datetime_str}"
+        else:
+            self.title.text = f"Time not set:\n{message}"
         threading.Thread(target=self._pop_after_delay, daemon=True).start()
 
     def _pop_after_delay(self) -> None:

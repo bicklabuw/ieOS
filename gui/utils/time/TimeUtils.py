@@ -1,4 +1,5 @@
 import subprocess
+import sys
 def get_duration_text(duration):
     """
     Converts a duration in seconds to a human-readable string format."
@@ -19,21 +20,39 @@ def get_duration_text(duration):
     
     return time_str
 
-def set_system_time(datetime_str):
+def set_system_time(datetime_str: str) -> tuple[bool, str]:
     """
-    Sets the system time using 'timedatectl'.
+    Set system time without interactive prompts.
 
     :param datetime_str: A string in 'YYYY-MM-DD HH:MM:SS' format
+    :return: (success, message)
     """
+    if sys.platform != "linux":
+        return False, "Time setting only supported on Linux/Raspberry Pi"
+
     try:
-        # Disable Time Sync First
-        subprocess.run(["sudo", "timedatectl", "set-ntp", "false"], check=True)
+        # Disable Time Sync First (non-interactive sudo to avoid password prompt hangs).
+        subprocess.run(
+            ["sudo", "-n", "timedatectl", "set-ntp", "false"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
 
         # Set the System Time
         subprocess.run(
-            ["sudo", "timedatectl", "set-time", datetime_str],
-            check=True
+            ["sudo", "-n", "timedatectl", "set-time", datetime_str],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
-        print("Time set successfully.")
+        return True, "Time set successfully"
+    except subprocess.TimeoutExpired:
+        return False, "Timed out while setting time"
     except subprocess.CalledProcessError as e:
-        print(f"Failed to set time: {e}")
+        err = (e.stderr or "").strip()
+        if "a password is required" in err.lower():
+            return False, "Sudo requires password (configure passwordless timedatectl)"
+        return False, f"Failed to set time: {err or str(e)}"
