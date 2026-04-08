@@ -54,7 +54,9 @@ def change_view_controller(vc_transition: ViewControllerTransition):
         old_vc_thread.join(JOIN_TIMEOUT_TIME)
 
         if old_vc_thread.is_alive():
-            raise RuntimeError("Previous View Did Not Finish Running After on_disappear()")
+            # Do not abort the transition thread if the previous VC's on_appear
+            # is still winding down; continue the navigation transition.
+            print("Warning: previous VC thread still alive after timeout; continuing transition")
 
     new_vc = update_vc_heirarchy(vc_transition)
     new_vc = new_vc if new_vc is not None else vc_transition.vc

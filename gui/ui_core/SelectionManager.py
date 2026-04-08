@@ -31,8 +31,9 @@ class SelectionManager:
         root.on_select()
         self._stack: list[View] = [root]
         self.wrap = wrap
-        self._enter(0)
+        # Keep current initialized before attempting first enter.
         self.current = None
+        self._enter(0)
 
     @property
     def current_parent(self) -> View:
