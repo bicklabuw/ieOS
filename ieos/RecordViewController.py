@@ -12,7 +12,13 @@ import gui.core.Display as Display
 from gui.ui_core.ViewController import ViewController
 from gui.ui_kit.Views import MultilineTextView, TextView, TextAnchor
 from gui.core.Display import SCREEN_WIDTH, SCREEN_HEIGHT
-from gui.utils.usb.USBDriveManager import mount_pendrive, unmount_pendrive, create_recordings_dir, get_recordings_path
+from gui.utils.recording_wav import write_queue_to_soundfile
+from gui.utils.usb.USBDriveManager import (
+    assert_recordings_still_ready,
+    ensure_recordings_ready,
+    get_recordings_path,
+    unmount_pendrive,
+)
 from gui.utils.time.TimeUtils import get_duration_text
 
 MAX_FILE_RECORD_TIME = 3600  # 1 hour per file segment
@@ -45,21 +51,11 @@ class RecordViewController(ViewController[None]):
     def on_appear(self) -> None:
         super().on_appear()
 
-        # 1. Mount pendrive
+        # 1. Mount USB, create /WAV, verify writable (retries on hot-plug)
         try:
-            mount_pendrive()
+            ensure_recordings_ready()
         except OSError as e:
-            self._status.text = f"No USB drive:\n{e}"
-            time.sleep(2)
-            self.pop_view_controller()
-            return
-
-        # 2. Create recordings directory
-        try:
-            create_recordings_dir()
-        except OSError as e:
-            unmount_pendrive()
-            self._status.text = f"Dir error:\n{e}"
+            self._status.text = f"USB not ready:\n{e}"
             time.sleep(2)
             self.pop_view_controller()
             return
@@ -99,13 +95,34 @@ class RecordViewController(ViewController[None]):
         def record(id, index, hour, q):
             def callback(indata, frames, time_, status):
                 q.put(indata.copy())
+
             file_path = f"{get_recordings_path()}/{file_prefix}mic{index}hour{hour}.wav"
             try:
-                with sf.SoundFile(file_path, mode='x', samplerate=sample_rate, channels=num_channels, subtype='PCM_24') as f:
-                    with sd.InputStream(samplerate=sample_rate, blocksize=750, device=id, channels=num_channels, callback=callback):
+                with sf.SoundFile(
+                    file_path,
+                    mode="x",
+                    samplerate=sample_rate,
+                    channels=num_channels,
+                    subtype="PCM_24",
+                ) as f:
+                    with sd.InputStream(
+                        samplerate=sample_rate,
+                        blocksize=750,
+                        device=id,
+                        channels=num_channels,
+                        callback=callback,
+                    ):
                         t0 = time.time()
-                        while time.time() - t0 < segment_duration and not self.stop_recording:
-                            f.write(q.get())
+                        end_t = t0 + segment_duration
+                        ok, err = write_queue_to_soundfile(
+                            f,
+                            q,
+                            stop_check=lambda: self.stop_recording,
+                            segment_end_time=end_t,
+                        )
+                        if not ok:
+                            self._status.text = f"Write error:\n{err}"
+                            self.stop_recording = True
             except Exception as e:
                 self._status.text = f"Error:\n{e}"
                 self.stop_recording = True
@@ -137,6 +154,13 @@ class RecordViewController(ViewController[None]):
 
         remaining_time = self._duration if not indefinite else None
         while indefinite or remaining_time > 0:
+            try:
+                assert_recordings_still_ready()
+            except OSError as e:
+                self._status.text = f"USB removed:\n{e}"
+                self.stop_recording = True
+                break
+
             seg = segment_duration if indefinite else min(remaining_time, segment_duration)
             segment_duration = seg  # used by record() closure
 

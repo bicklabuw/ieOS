@@ -1,7 +1,7 @@
 import os
 
 from gui.ui_kit.TableViewController import TableViewController
-from gui.utils.usb.USBDriveManager import mount_pendrive, get_recordings_path
+from gui.utils.usb.USBDriveManager import ensure_recordings_ready, get_recordings_path
 from gui.ui_kit.AlertViewController import AlertViewController
 from gui.ui_kit.KeyboardViewController import KeyboardViewController
 
@@ -36,7 +36,7 @@ class FileSelectViewController(TableViewController):
         self._files_loaded = True
 
         try:
-            mount_pendrive()
+            ensure_recordings_ready()
         except OSError:
             alert = AlertViewController("No pendrive\nconnected")
             alert.add_option("OK")

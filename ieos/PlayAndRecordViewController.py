@@ -12,7 +12,12 @@ import gui.core.Display as Display
 from gui.ui_core.ViewController import ViewController
 from gui.ui_kit.Views import MultilineTextView, TextAnchor, TextView
 from gui.core.Display import SCREEN_WIDTH, SCREEN_HEIGHT
-from gui.utils.usb.USBDriveManager import is_pendrive_connected, create_recordings_dir, get_recordings_path
+from gui.utils.recording_wav import write_queue_to_soundfile
+from gui.utils.usb.USBDriveManager import (
+    assert_recordings_still_ready,
+    ensure_recordings_ready,
+    get_recordings_path,
+)
 
 MAX_FILE_RECORD_TIME = 3600
 
@@ -50,12 +55,13 @@ class PlayAndRecordViewController(ViewController[None]):
 
     def on_appear(self) -> None:
         super().on_appear()
-        if not is_pendrive_connected():
-            self._status.text = "No pendrive!"
+        try:
+            ensure_recordings_ready()
+        except OSError as e:
+            self._status.text = f"USB not ready:\n{e}"
             time.sleep(2)
             self.pop_view_controller()
             return
-        create_recordings_dir()
 
         # Get file duration
         try:
@@ -122,17 +128,37 @@ class PlayAndRecordViewController(ViewController[None]):
                 if status:
                     print(status, file=sys.stderr)
                 q.put(indata.copy())
+
             file_path = f"{get_recordings_path()}/{file_prefix}_mic{mic_idx}.wav"
-            with sf.SoundFile(file_path, mode='x', samplerate=sample_rate,
-                              channels=num_channels, subtype='PCM_24') as wav_f:
-                with sd.InputStream(samplerate=sample_rate, blocksize=750, device=mic_id,
-                                    channels=num_channels, callback=callback):
-                    t0 = time.time()
-                    while time.time() - t0 < duration and not self.stop_recording:
-                        try:
-                            wav_f.write(q.get(timeout=0.5))
-                        except queue.Empty:
-                            pass
+            try:
+                with sf.SoundFile(
+                    file_path,
+                    mode="x",
+                    samplerate=sample_rate,
+                    channels=num_channels,
+                    subtype="PCM_24",
+                ) as wav_f:
+                    with sd.InputStream(
+                        samplerate=sample_rate,
+                        blocksize=750,
+                        device=mic_id,
+                        channels=num_channels,
+                        callback=callback,
+                    ):
+                        t0 = time.time()
+                        end_t = t0 + duration
+                        ok, err = write_queue_to_soundfile(
+                            wav_f,
+                            q,
+                            stop_check=lambda: self.stop_recording,
+                            segment_end_time=end_t,
+                        )
+                        if not ok:
+                            self._status.text = f"Write error:\n{err}"
+                            self.stop_recording = True
+            except Exception as e:
+                self._status.text = f"Error:\n{e}"
+                self.stop_recording = True
 
         def countdown(total):
             remaining = total
@@ -149,6 +175,13 @@ class PlayAndRecordViewController(ViewController[None]):
         cnt_thread.start()
 
         while actual_time > 0:
+            try:
+                assert_recordings_still_ready()
+            except OSError as e:
+                self._status.text = f"USB removed:\n{e}"
+                self.stop_recording = True
+                break
+
             mic_threads = []
             for i in range(len(mic_ids)):
                 q = queue.Queue()
