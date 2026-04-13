@@ -1,3 +1,4 @@
+# ieos/MicTestViewController.py
 from __future__ import annotations
 
 import queue
@@ -17,10 +18,11 @@ from gui.ui_kit.Views import CoordinateView
 # ---------------------------------------------------------------------------
 # Layout constants
 # ---------------------------------------------------------------------------
-_BAR_TOP    = 2
-_BAR_BOTTOM = 52
-_BAR_H      = _BAR_BOTTOM - _BAR_TOP   # 52 usable px
-_HINT_Y     = 54
+_BAR_TOP       = 2
+_BAR_BOTTOM    = 46  # leave room for mic index labels below bars
+_BAR_H         = _BAR_BOTTOM - _BAR_TOP
+_MIC_LABEL_Y   = 48  # single-digit row beneath each bar outline
+_HINT_Y        = 54
 
 # Fixed bar geometry per mic count: (bar_w, gap, left_margin)
 _BAR_GEOMETRY = {
@@ -102,6 +104,13 @@ class _MicCheckView(CoordinateView):
                 if pk > bh + 1:
                     py = _BAR_BOTTOM - pk
                     draw.line([(x0, py), (x1, py)], fill=Display.ON, width=1)
+
+                # Logical mic slot 0 .. n-1 (not PortAudio device index)
+                label = str(i)
+                lb = draw.textbbox((0, 0), label, font=font)
+                lw = lb[2] - lb[0]
+                tx = x0 + (bar_w - lw) / 2
+                draw.text((tx, _MIC_LABEL_Y), label, fill=Display.ON, font=font)
         else:
             # --- No mics ---
             msg = self._status_text
@@ -132,8 +141,14 @@ class MicTestViewController(ViewController[bool]):
     def on_appear(self) -> None:
         super().on_appear()
         devices = sd.query_devices()
-        mics = [d for d in devices
-                if d["name"].startswith("USB") and d["max_input_channels"] > 0][:3]
+        mics = sorted(
+            (
+                d
+                for d in devices
+                if d["name"].startswith("USB") and d["max_input_channels"] > 0
+            ),
+            key=lambda d: int(d["index"]),
+        )[:3]
 
         if not mics:
             self._view.setup(0, "No mics found", "K2: BACK")
