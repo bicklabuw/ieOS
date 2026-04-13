@@ -12,6 +12,13 @@ import gui.core.Display as Display
 from gui.ui_core.ViewController import ViewController
 from gui.ui_kit.Views import MultilineTextView, TextView, TextAnchor
 from gui.core.Display import SCREEN_WIDTH, SCREEN_HEIGHT
+from gui.utils.recording_format import (
+    CHANNELS,
+    SAMPLE_RATE,
+    WAV_SUBTYPE,
+    list_usb_recording_devices,
+)
+from gui.utils.recording_metadata import write_session_metadata
 from gui.utils.recording_wav import write_queue_to_soundfile
 from gui.utils.usb.USBDriveManager import (
     assert_recordings_still_ready,
@@ -76,20 +83,24 @@ class RecordViewController(ViewController[None]):
         date_str = now.strftime("%m_%d_%Y_%H_%M_%S")
         file_prefix = f"{self._name}_{date_str}"
 
-        # Detect USB mics (up to 3)
-        devices = sd.query_devices()
-        mic_ids = []
-        mic_indices = []
-        for d in devices:
-            name = d['name']
-            if name.startswith("USB") and d['max_input_channels'] > 0:
-                mic_ids.append(d['index'])
-                mic_indices.append(name[name.index("hw:") + 3 : name.index(",")])
-                if len(mic_ids) == 3:
-                    break
+        mics = list_usb_recording_devices()
+        mic_ids = [d["index"] for d in mics]
+        mic_slots = list(range(len(mic_ids)))
 
-        num_channels = 1
-        sample_rate = 44100
+        write_session_metadata(
+            get_recordings_path(),
+            file_prefix,
+            recording_mode="record",
+            session_name=self._name,
+            duration_seconds=None if indefinite else self._duration,
+            indefinite=indefinite,
+            mic_indices=mic_slots,
+            sample_rate=SAMPLE_RATE,
+            wav_name_pattern=f"{file_prefix}mic<index>hour<segment>.wav",
+        )
+
+        num_channels = CHANNELS
+        sample_rate = SAMPLE_RATE
         segment_duration = MAX_FILE_RECORD_TIME
 
         def record(id, index, hour, q):
@@ -103,7 +114,7 @@ class RecordViewController(ViewController[None]):
                     mode="x",
                     samplerate=sample_rate,
                     channels=num_channels,
-                    subtype="PCM_24",
+                    subtype=WAV_SUBTYPE,
                 ) as f:
                     with sd.InputStream(
                         samplerate=sample_rate,
@@ -165,11 +176,11 @@ class RecordViewController(ViewController[None]):
             segment_duration = seg  # used by record() closure
 
             mic_threads = []
-            for mic_id, mic_index in zip(mic_ids, mic_indices):
+            for mic_id, slot in zip(mic_ids, mic_slots):
                 q = queue.Queue()
                 t = threading.Thread(
                     target=record,
-                    args=(mic_id, mic_index, rec_cnt, q),
+                    args=(mic_id, slot, rec_cnt, q),
                     daemon=True,
                 )
                 mic_threads.append(t)

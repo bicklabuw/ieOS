@@ -12,6 +12,13 @@ import gui.core.Display as Display
 from gui.ui_core.ViewController import ViewController
 from gui.ui_kit.Views import MultilineTextView, TextAnchor, TextView
 from gui.core.Display import SCREEN_WIDTH, SCREEN_HEIGHT
+from gui.utils.recording_format import (
+    CHANNELS,
+    SAMPLE_RATE,
+    WAV_SUBTYPE,
+    list_usb_recording_devices,
+)
+from gui.utils.recording_metadata import write_session_metadata
 from gui.utils.recording_wav import write_queue_to_soundfile
 from gui.utils.usb.USBDriveManager import (
     assert_recordings_still_ready,
@@ -26,7 +33,7 @@ class PlayAndRecordViewController(ViewController[None]):
     """
     Plays a WAV file and simultaneously records from all USB mics.
     Recording duration = file duration. Key2 stops both.
-    File naming: rec_{MM}_{DD}_{YYYY}_{HH}_{MM}_{SS}mic{X}hour{Y}.wav
+    File naming: …mic<slot>…wav with slot 0..n-1 (matches mic test order), not ALSA hw numbers.
     """
 
     def __init__(self, file_path: str, name: str) -> None:
@@ -109,19 +116,23 @@ class PlayAndRecordViewController(ViewController[None]):
         date_str = datetime.now().strftime("%m%d_%H%M%S")
         file_prefix = f"playback_{self._name}_{date_str}"
 
-        num_channels = 1
-        sample_rate = 44100
+        num_channels = CHANNELS
+        sample_rate = SAMPLE_RATE
 
-        devices = sd.query_devices()
-        mic_ids = []
-        mic_indices = []
-        for d in devices:
-            name = d["name"]
-            if d['max_input_channels'] > 0 and name.startswith("USB"):
-                mic_ids.append(d['index'])
-                mic_indices.append(name[name.index("hw:")+3 : name.index(",")])
-                if len(mic_ids) == 3:
-                    break
+        mics = list_usb_recording_devices()
+        mic_ids = [d["index"] for d in mics]
+        mic_slots = list(range(len(mic_ids)))
+
+        write_session_metadata(
+            get_recordings_path(),
+            file_prefix,
+            recording_mode="playback_record",
+            source_wav=os.path.basename(self._file_path),
+            duration_seconds=actual_time,
+            mic_indices=mic_slots,
+            sample_rate=SAMPLE_RATE,
+            wav_name_pattern=f"{file_prefix}_mic<index>.wav",
+        )
 
         def record(mic_id, mic_idx, q):
             def callback(indata, frames, time_, status):
@@ -136,7 +147,7 @@ class PlayAndRecordViewController(ViewController[None]):
                     mode="x",
                     samplerate=sample_rate,
                     channels=num_channels,
-                    subtype="PCM_24",
+                    subtype=WAV_SUBTYPE,
                 ) as wav_f:
                     with sd.InputStream(
                         samplerate=sample_rate,
@@ -183,9 +194,9 @@ class PlayAndRecordViewController(ViewController[None]):
                 break
 
             mic_threads = []
-            for i in range(len(mic_ids)):
+            for slot, mic_id in enumerate(mic_ids):
                 q = queue.Queue()
-                t = threading.Thread(target=record, args=[mic_ids[i], mic_indices[i], q])
+                t = threading.Thread(target=record, args=[mic_id, slot, q])
                 mic_threads.append(t)
             for t in mic_threads:
                 t.start()

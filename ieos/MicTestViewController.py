@@ -14,6 +14,7 @@ from gui.core.Display import SCREEN_HEIGHT, SCREEN_WIDTH
 from PIL import ImageDraw, ImageFont
 from gui.ui_core.ViewController import ViewController
 from gui.ui_kit.Views import CoordinateView
+from gui.utils.recording_format import list_usb_recording_devices
 
 # ---------------------------------------------------------------------------
 # Layout constants
@@ -140,15 +141,7 @@ class MicTestViewController(ViewController[bool]):
 
     def on_appear(self) -> None:
         super().on_appear()
-        devices = sd.query_devices()
-        mics = sorted(
-            (
-                d
-                for d in devices
-                if d["name"].startswith("USB") and d["max_input_channels"] > 0
-            ),
-            key=lambda d: int(d["index"]),
-        )[:3]
+        mics = list_usb_recording_devices()
 
         if not mics:
             self._view.setup(0, "No mics found", "K2: BACK")
