@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import Dict
 import gui.core.Display as Display
@@ -5,12 +6,20 @@ from gui.core.OSGlobals import get_polling, set_polling, get_current_view_contro
 from gui.core.OSGlobals import KEY_INIT_CHG_WAIT_TIME, KEY_PRESSED_CHG_WAIT_TIME
 from gui.utils.InputUtils import InputCode, InputPhase
 
+_log = logging.getLogger(__name__)
+
 
 def polling_thread(sleep_time: float, on_disp: bool = True, on_keyboard: bool = False) -> None:
     """
     Poll hardware inputs at `sleep_time` intervals, dispatching press/hold/release
     events into the current ViewController via on_event(code, phase, held).
     """
+    _log.info(
+        "polling thread running (display_gpio=%s, keyboard=%s, interval=%.3fs)",
+        on_disp,
+        on_keyboard,
+        sleep_time,
+    )
     set_polling()
     if on_disp:
         disp = Display.disp
@@ -80,7 +89,7 @@ def polling_thread(sleep_time: float, on_disp: bool = True, on_keyboard: bool = 
                     # Press or Hold logic
                     if curr == 1:
                         if prev == 0:
-                            print(f"Key Pressed: {key} - Code: {code}")
+                            _log.debug("keyboard key %r -> %s PRESS", key, code.name)
 
                             # Initial press
                             vc.on_event(code, InputPhase.PRESS)

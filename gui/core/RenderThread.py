@@ -1,7 +1,11 @@
+import logging
 import time
 from gui.ui_core.View import View
 from gui.core.OSGlobals import get_current_view_controller, get_debug_viewer
 import gui.core.Display as Display
+
+_log = logging.getLogger(__name__)
+
 
 def _subtree_dirty(view: View) -> bool:
     # Recursively check this view and all subviews for a dirty flag.
@@ -66,7 +70,7 @@ def render_thread(frame_time: float, on_disp: bool = True, on_screen: bool = Fal
         elif on_screen:
             if screen_cur_wait_frames == screen_max_wait and prev_img is not None:
                 # Push to the OS's screen to prevent appearing unresponsive
-                print("RENDER - NO CHANGE")
+                _log.debug("debug screen refresh: no framebuffer change, re-pushing last image")
                 debug_viewer.show(prev_img)
                 screen_cur_wait_frames = 0
 

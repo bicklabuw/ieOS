@@ -13,6 +13,8 @@ import logging
 from datetime import datetime
 from enum import Enum
 
+_log = logging.getLogger(__name__)
+
 
 """
 
@@ -88,7 +90,13 @@ class NumberInputView(CoordinateView):
         if min_value > max_value:
             raise ValueError("min_value cannot be greater than max_value")
         if value < min_value or value > max_value:
-            logging.getLogger().warning(f"Initial value {value} is out of bounds ({min_value}-{max_value}), setting to min_value {min_value}")
+            _log.warning(
+                "initial value %s out of bounds [%s, %s]; clamping to min_value %s",
+                value,
+                min_value,
+                max_value,
+                min_value,
+            )
             value = min_value
 
         self.min_value = min_value

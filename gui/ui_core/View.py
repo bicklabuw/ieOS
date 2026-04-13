@@ -1,10 +1,14 @@
 from __future__ import annotations
+import logging
 from gui.core.Display import SCREEN_WIDTH, SCREEN_HEIGHT, create_image_from_image, SCREEN_TEXT_COLOR
 from typing import Optional, Callable, final
 from gui.utils.InputUtils import InputCode, InputPhase
 from PIL import ImageDraw, Image
 
 import inspect
+
+_log = logging.getLogger(__name__)
+
 
 class View:
     def __init__(
@@ -111,7 +115,7 @@ class View:
             self.subviews.remove(subview)
             subview.superview = None
             #self._needs_layout = True
-            print("Removed subview:", subview, "from", self)
+            _log.debug("removed subview %s from %s", subview, self)
             self._mark_dirty()
         else:
             raise RuntimeError("Removing Subview that is not in Subviews")
@@ -141,9 +145,14 @@ class View:
 
 
         if self.width <= 0 or self.height <= 0:
-            print("View has no width or height, skipping draw: ", self)
-            print("Abs X: ", self.abs_x, "Abs Y: ", self.abs_y)
-            print("Width: ", self.width, "Height: ", self.height)
+            _log.warning(
+                "skip draw: zero size view %s (abs=%s,%s size=%sx%s)",
+                self,
+                self.abs_x,
+                self.abs_y,
+                self.width,
+                self.height,
+            )
             self._clear_dirty()
             return
 
@@ -227,12 +236,12 @@ class View:
     def on_select(self) -> None:
         self.selected = True
         self._mark_dirty()
-        print("View selected:", self)
+        _log.debug("view selected: %s", self)
 
     def on_deselect(self) -> None:
         self.selected = False
         self._mark_dirty()
-        print("View deselected:", self)
+        _log.debug("view deselected: %s", self)
 
     def get_edge_distances(
         self, screen_w: int,
@@ -260,7 +269,7 @@ class View:
                 self.controller.on_adding_selectable_view(self.superview, self)
             
             self._mark_dirty()
-            print(f"View visibility changed to {value} for {self}")
+            _log.debug("view visibility -> %s for %s", value, self)
 
     @property
     def selectable(self) -> bool:
@@ -278,15 +287,14 @@ class View:
             if self.controller and self.selectable and self._visible and self.superview:
                 self.controller.on_adding_selectable_view(self.superview, self)
             
-            print(f"View selectable changed to {value} for {self}")
+            _log.debug("view selectable -> %s for %s", value, self)
             self._mark_dirty()
     def select(self) -> None:
         self.controller.select(self)
 
 class ViewControllerView(View):
     def __init__(self, vc: ViewController, selectable: bool = True) -> None:
-        print("VIEW CONTROLLER VIEW")
-        print(vc)
+        _log.debug("ViewControllerView for %s", vc)
         super().__init__(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, vc, selectable)
 
     def _layout(self, parent_abs_x = 0, parent_abs_y = 0):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from gui.ui_core.View import View
 from gui.utils.InputUtils import InputPhase, InputCode
 from typing import Optional
@@ -6,6 +7,9 @@ from math import sqrt
 from enum import Enum
 from gui.core.Display import SCREEN_HEIGHT, SCREEN_WIDTH
 from collections import deque
+
+_log = logging.getLogger(__name__)
+
 
 class Direction(Enum):
     UP = InputCode.UP
@@ -84,9 +88,12 @@ class SelectionManager:
         
         # check for root error
         if view_stack[0] != self._stack[0]:
-            print("ERROR")
-            print(f"View stack to select {view}: {list(view_stack)}"
-                    f"\nCurrent stack: {self._stack}")
+            _log.error(
+                "select(%s): root mismatch — target stack %s vs current %s",
+                view,
+                list(view_stack),
+                self._stack,
+            )
             raise ValueError(f"View {view} is not a descendant of root view {self._stack[0]}")
 
         n = min(len(view_stack), len(self._stack))
@@ -96,8 +103,13 @@ class SelectionManager:
                 stop_index = i
                 break
 
-        print(f"View stack to select {view}: {list(view_stack)}"
-              f"\nCurrent stack: {self._stack}\nStop index: {stop_index}")
+        _log.debug(
+            "select(%s): target_stack=%s current_stack=%s stop_index=%s",
+            view,
+            list(view_stack),
+            self._stack,
+            stop_index,
+        )
 
         self.current.on_deselect()
         for _ in range(stop_index, len(self._stack)):
@@ -107,7 +119,7 @@ class SelectionManager:
             self._enter_view(view_stack[stop_index])
         
         for i in range(stop_index+1, len(view_stack)):
-            print(self._siblings())
+            _log.debug("select drill_in siblings=%s", self._siblings())
             self.drill_in(view_stack[i])
 
     def _find_nearest(self, direction: Direction) -> Optional[int]:
@@ -248,8 +260,13 @@ class SelectionManager:
             self._enter(ind + 1)
             
 
-        print(f"Selected view {view} removed, current is now {self.current}")
-        print(f"INDEX: {ind}, SIBLINGS: {len(views)}")
+        _log.debug(
+            "selected view removed: %s -> current=%s (index=%s siblings=%s)",
+            view,
+            self.current,
+            ind,
+            len(views),
+        )
 
     def exit(self,) -> None:
         if len(self._stack) <= 1:

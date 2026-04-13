@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from gui.ui_core.View import View, ViewControllerView
 from gui.ui_core.SelectionManager import SelectionManager, Direction
 from abc import ABC
@@ -21,12 +22,14 @@ class ChangeViewControllerType(Enum):
 
 T = TypeVar('T')
 
+_log = logging.getLogger(__name__)
+
+
 class ViewController(Generic[T]):
     def __init__(self) -> None:
         """Initialize with a full-screen default view."""
         # Root view covers the entire screen by default
-        print("ViewController init")
-        print(self)
+        _log.debug("ViewController init: %s", self)
         self.view = ViewControllerView(self)
         self.selection = SelectionManager(self.view, wrap=True)
 
@@ -43,10 +46,9 @@ class ViewController(Generic[T]):
     ) -> bool:
         name = f'on_{code.name.lower()}_{phase.name.lower()}'
         method = getattr(self, name, None)
-        print(f"Handling override for {code} in phase {phase}")
+        _log.debug("handle_override: %s %s (method=%s)", code.name, phase.name, method)
         if not method:
             return False
-        print(f"Method found: {method}")
         ret_val = method(held) if phase == InputPhase.RELEASE else method()
         return ret_val if isinstance(ret_val, bool) else True
 
@@ -58,7 +60,7 @@ class ViewController(Generic[T]):
         phase: InputPhase,
         held: bool = False
     ) -> None:
-        print(f"ViewController on_event: {code}, {phase}, held={held}")
+        _log.debug("on_event: %s %s held=%s", code.name, phase.name, held)
         if self.handle_override(code, phase, held):
             return
         cur = self.selection.current
@@ -68,7 +70,7 @@ class ViewController(Generic[T]):
             InputCode.UP, InputCode.DOWN,
             InputCode.LEFT, InputCode.RIGHT
         ):
-            print("Attempting to move")
+            _log.debug("directional input: move %s", code.name)
             if self.selection.move(Direction.from_code(code)):
                 return
             self.handle_wrap(code)
@@ -76,7 +78,7 @@ class ViewController(Generic[T]):
         if code == InputCode.BUTTON and phase == InputPhase.PRESS:
             cur = self.selection.current
             if cur is None:
-                print("No current selection to handle button press")
+                _log.debug("BUTTON press ignored: no current selection")
                 return
             if cur.selectable and len(cur.subviews) > 0:
                 self.selection.drill_in()
@@ -116,7 +118,7 @@ class ViewController(Generic[T]):
         Pop the top controller.  If it was pushed with a callback, pass `return_data` back.
         """
         t = ViewControllerTransition(None, ViewControllerTransitionType.POP)
-        print(f"Pop view controller: {t}")
+        _log.info("request POP: %s", t)
         put_view_controller_transition(t)
         if hasattr(self, '_return_callback'):
             self._return_callback(return_data)
@@ -124,7 +126,7 @@ class ViewController(Generic[T]):
     def pop_to_root_view_controller(self) -> None:
         """Pop back to the initial/root controller."""
         t = ViewControllerTransition(None, ViewControllerTransitionType.POP_TO_ROOT)
-        print(f"Pop to root view controller: {t}")
+        _log.info("request POP_TO_ROOT: %s", t)
         put_view_controller_transition(t)
 
     def on_removing_selected_view(self, subview: View) -> None:
@@ -142,9 +144,9 @@ class ViewController(Generic[T]):
         Called when a selectable view is added to its parent.
         Override to handle any special setup.
         """
-        print(f"Adding selectable view: {subview}")
+        _log.debug("adding selectable subview %s under parent %s", subview, parent)
         if parent == self.selection.current_parent and self.selection.current is None:
-            print(f"Adding selectable view to current parent: {parent}")
+            _log.debug("auto-select first selectable in current parent %s", parent)
             self.selection._enter(0)
     
     def select(self, view: View) -> None:

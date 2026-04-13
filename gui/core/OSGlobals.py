@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 import threading
 from queue import SimpleQueue
 from typing import TYPE_CHECKING, Optional
@@ -26,6 +27,9 @@ _polling_thread = None
 _view_controller_thread = None
 
 _debug_viewer = None
+
+_log = logging.getLogger(__name__)
+
 
 def on_view_controller_transition_thread_thread() -> bool:
     return threading.current_thread() == _view_controller_transition_thread
@@ -59,14 +63,14 @@ def clear_view_controller_changed_flag():
 
 def pop_view_controller_transition() -> ViewControllerTransition:
     global _view_controller_transitions
-    print("VC Getting")
-    return _view_controller_transitions.get()
+    t = _view_controller_transitions.get()
+    _log.debug("dequeued VC transition (blocked until available): %s", t)
+    return t
 
 def put_view_controller_transition(vc_transition: ViewControllerTransition):
     global _view_controller_transitions
-    print("Putting: ", vc_transition)
+    _log.debug("enqueue VC transition: %s", vc_transition)
     _view_controller_transitions.put(vc_transition)
-    print("Updated VC Transitions List: ", _view_controller_transitions)
 
 def set_view_controller_thread(vc_thread: threading.Thread):
     # Only allow on main thread

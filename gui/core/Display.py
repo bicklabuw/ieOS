@@ -1,3 +1,5 @@
+import logging
+
 from gui.core.SH1106 import LCD_WIDTH  as _LCD_WIDTH
 from gui.core.SH1106 import LCD_HEIGHT as _LCD_HEIGHT
 from PIL import Image, ImageDraw, ImageFont
@@ -15,6 +17,8 @@ DEF_IMAGE: Image = Image.new(IMAGE_MODE, (SCREEN_WIDTH, SCREEN_HEIGHT), SCREEN_T
 DEF_DRAW: ImageDraw = ImageDraw.Draw(DEF_IMAGE)
 DEF_FONT: ImageFont = ImageFont.load_default()
 
+_log = logging.getLogger(__name__)
+
 # Specifies if the display has inverted colors (i.e. ON is 0 instead of 255 or 1, OFF is 225 or 1 instead of 0)
 DISP_INV: bool = True
 ON: int  = 0
@@ -25,11 +29,12 @@ def init():
     import gui.core.SH1106 as SH1106
     # If not created yet, create display object
     if disp is None:
-        print("HI")
+        _log.info("initializing SH1106 display (%dx%d)", SCREEN_WIDTH, SCREEN_HEIGHT)
         # Create, Initialize and Clear display object.
         disp = SH1106.SH1106()
         disp.Init()
         disp.clear()
+        _log.debug("display init complete")
 
 def create_image(
     width: int = SCREEN_WIDTH,

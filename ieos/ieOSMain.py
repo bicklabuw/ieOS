@@ -1,6 +1,8 @@
+import logging
 import time
 
 import gui.core.Main as Main
+from gui.core.logging_config import configure_logging
 from gui.ui_kit.TitleViewController import TitleViewController
 from ieos.MainMenuViewController import MainMenuViewController
 from ieos.SystemTime import SystemTimeViewController
@@ -27,4 +29,10 @@ class StartupViewController(TitleViewController):
 
 
 if __name__ == "__main__":
+    # Default logging until Main.main() reapplies config from CLI (-v / -q).
+    configure_logging()
+    logging.getLogger(__name__).info(
+        "Insect Eavesdropper OS v%s — invoking Main.main",
+        APP_VERSION,
+    )
     Main.main(StartupViewController())
