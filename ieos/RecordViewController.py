@@ -18,6 +18,7 @@ from gui.utils.recording_format import (
     WAV_SUBTYPE,
     list_usb_recording_devices,
 )
+from ieos.mic_selection_store import get_enabled_slots_for_count
 from gui.utils.recording_metadata import write_session_metadata
 from gui.utils.recording_wav import write_queue_to_soundfile
 from gui.utils.usb.USBDriveManager import (
@@ -84,8 +85,11 @@ class RecordViewController(ViewController[None]):
         file_prefix = f"{self._name}_{date_str}"
 
         mics = list_usb_recording_devices()
-        mic_ids = [d["index"] for d in mics]
-        mic_slots = list(range(len(mic_ids)))
+        mic_slots = get_enabled_slots_for_count(len(mics))
+        if not mic_slots:
+            self._status.text = "No mics to record"
+            time.sleep(2)
+            return
 
         write_session_metadata(
             get_recordings_path(),
@@ -176,7 +180,8 @@ class RecordViewController(ViewController[None]):
             segment_duration = seg  # used by record() closure
 
             mic_threads = []
-            for mic_id, slot in zip(mic_ids, mic_slots):
+            for slot in mic_slots:
+                mic_id = mics[slot]["index"]
                 q = queue.Queue()
                 t = threading.Thread(
                     target=record,

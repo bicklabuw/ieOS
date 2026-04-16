@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import time
 
@@ -89,6 +90,23 @@ def get_recordings_path() -> str:
     if _active_mount_point is None:
         raise OSError("USB drive not mounted")
     return _active_mount_point + PENDRIVE_RECORDINGS_DIR
+
+
+def get_recordings_filesystem_free_bytes() -> int | None:
+    """
+    Free space on the filesystem that holds /WAV, if the drive is mounted and path exists.
+    Returns None if not mounted or usage cannot be read.
+    """
+    refresh_mount_state()
+    if _active_mount_point is None:
+        return None
+    try:
+        path = get_recordings_path()
+        if not os.path.isdir(path):
+            return None
+        return shutil.disk_usage(path).free
+    except OSError:
+        return None
 
 
 def _verify_dir_writable(dir_path: str) -> None:

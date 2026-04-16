@@ -1,0 +1,40 @@
+# ieos/pyproject.toml — PyPI distribution `ieos-gui` (import package: `gui`)
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ieos-gui"
+version = "0.1.0"
+description = "Insect Eavesdropper OS GUI framework (OLED UI for Raspberry Pi and desktop dev modes)"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "Pillow",
+    "numpy",
+    "soundfile",
+    "sounddevice",
+    "pynput",
+    "pygame",
+    "gpiozero",
+]
+
+[project.optional-dependencies]
+rpi = [
+    "smbus; sys_platform=='linux'",
+    "spidev; sys_platform=='linux'",
+    "RPi.GPIO; sys_platform=='linux'",
+    "lgpio; sys_platform=='linux'",
+]
+
+[project.urls]
+Homepage = "https://github.com/insect-eavesdropper/ieos"
+
+[project.scripts]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gui*"]
+
+[tool.setuptools.package-data]
+gui = ["**/*.sh", "**/*.txt"]

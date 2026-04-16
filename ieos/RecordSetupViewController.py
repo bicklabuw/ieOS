@@ -1,10 +1,18 @@
 from __future__ import annotations
 
-import sounddevice as sd
-
 import gui.core.Display as Display
 import gui.core.Main as Main
 from gui.ui_kit.DateTimeViewController import ARROW_PADDING, ARROW_SIZE, ARROW_GAP
+from gui.utils.recording_format import (
+    count_usb_input_mics,
+    estimate_record_seconds_remaining,
+    format_compact_duration_h_m,
+)
+from ieos.mic_selection_store import get_enabled_slots_for_count
+from gui.utils.usb.USBDriveManager import (
+    ensure_recordings_ready,
+    get_recordings_filesystem_free_bytes,
+)
 from ieos.MicTestViewController import MicTestViewController
 from gui.ui_core.ViewController import ViewController
 from gui.ui_kit.Views import CoordinateView, TextView, TextAnchor
@@ -38,13 +46,24 @@ KEY_COARSE_STEP    = 5 * 60        # ±5 min per hold (snapped)
 # ---------------------------------------------------------------------------
 _BOX_H      = 14
 _BOX_W      = 80
-_TITLE_GAP  = 4     # px between title and box slot
-_HINT_GAP   = 4     # px between box slot and hint row
+_TITLE_GAP  = 2     # px between title and USB line
+_USB_GAP    = 2     # px between USB line and duration box
+_HINT_GAP   = 3     # px between box slot and hint row
 
 
 # ---------------------------------------------------------------------------
 # Duration formatting
 # ---------------------------------------------------------------------------
+def _clamp_duration(seconds: int) -> int:
+    if seconds < 0:
+        seconds = 0
+    if 0 < seconds < MIN_DURATION:
+        seconds = 0
+    if seconds > MAX_DURATION:
+        seconds = MAX_DURATION
+    return seconds
+
+
 def _format_duration(seconds: int) -> str:
     if seconds == 0:
         return "No Limit"
@@ -133,6 +152,12 @@ class RecordSetupViewController(ViewController[int]):
         )
         self._title.selectable = False
 
+        self._usb_line = TextView(
+            0, 0, text="",
+            anchor=TextAnchor.LEFT_TOP, fill=Display.ON,
+        )
+        self._usb_line.selectable = False
+
         self._display = _DurationDisplayView(0, 0, _BOX_W)
 
         self._hint = TextView(
@@ -142,20 +167,19 @@ class RecordSetupViewController(ViewController[int]):
         self._hint.selectable = False
 
         self.view.add_subview(self._title)
+        self.view.add_subview(self._usb_line)
         self.view.add_subview(self._display)
         self.view.add_subview(self._hint)
 
-        self._set_duration(DEFAULT_DURATION)
+        self._display.seconds = _clamp_duration(DEFAULT_DURATION)
 
     def on_appear(self) -> None:
         super().on_appear()
-        count = sum(
-            1 for d in sd.query_devices()
-            if d['name'].startswith("USB") and d['max_input_channels'] > 0
-        )
-        count = min(count, 3)
+        n_hw = count_usb_input_mics()
+        count = len(get_enabled_slots_for_count(n_hw)) if n_hw else 0
         noun = "MIC" if count == 1 else "MICS"
         self._hint.text = f"K3: GO ({count} {noun})"
+        self._refresh_usb_line()
 
     # ------------------------------------------------------------------
     # Layout
@@ -163,16 +187,28 @@ class RecordSetupViewController(ViewController[int]):
     def on_layout(self) -> None:
         slot_h = ARROW_PADDING + _BOX_H + ARROW_SIZE
         title_w, title_h = self._title.get_text_size()
-        hint_w,  hint_h  = self._hint.get_text_size()
+        usb_w, usb_h = self._usb_line.get_text_size()
+        hint_w, hint_h = self._hint.get_text_size()
 
-        content_h = title_h + _TITLE_GAP + slot_h + _HINT_GAP + hint_h
-        top_y = max(2, (SCREEN_HEIGHT - content_h) // 2)
+        content_h = (
+            title_h
+            + _TITLE_GAP
+            + usb_h
+            + _USB_GAP
+            + slot_h
+            + _HINT_GAP
+            + hint_h
+        )
+        top_y = max(0, (SCREEN_HEIGHT - content_h) // 2)
 
         self._title.x = (SCREEN_WIDTH - title_w) / 2
         self._title.y = top_y
 
+        self._usb_line.x = (SCREEN_WIDTH - usb_w) / 2
+        self._usb_line.y = top_y + title_h + _TITLE_GAP
+
         self._display.x = (SCREEN_WIDTH - _BOX_W) / 2
-        self._display.y = top_y + title_h + _TITLE_GAP
+        self._display.y = self._usb_line.y + usb_h + _USB_GAP
 
         self._hint.x = (SCREEN_WIDTH - hint_w) / 2
         self._hint.y = self._display.y + slot_h + _HINT_GAP
@@ -181,13 +217,30 @@ class RecordSetupViewController(ViewController[int]):
     # Duration helpers
     # ------------------------------------------------------------------
     def _set_duration(self, seconds: int) -> None:
-        if seconds < 0:
-            seconds = 0
-        if 0 < seconds < MIN_DURATION:
-            seconds = 0         # snap below minimum to No Limit
-        if seconds > MAX_DURATION:
-            seconds = MAX_DURATION
-        self._display.seconds = seconds
+        self._display.seconds = _clamp_duration(seconds)
+        self._refresh_usb_line()
+
+    def _refresh_usb_line(self) -> None:
+        try:
+            ensure_recordings_ready()
+        except OSError:
+            self._usb_line.text = "No USB"
+            self.on_layout()
+            return
+        free = get_recordings_filesystem_free_bytes()
+        if free is None:
+            self._usb_line.text = "No USB"
+            self.on_layout()
+            return
+        n_hw = count_usb_input_mics()
+        if n_hw <= 0:
+            self._usb_line.text = "USB: no mics"
+            self.on_layout()
+            return
+        mics = len(get_enabled_slots_for_count(n_hw))
+        sec = estimate_record_seconds_remaining(free, mics)
+        self._usb_line.text = f"USB ~{format_compact_duration_h_m(sec)} free"
+        self.on_layout()
 
     def _snap_up(self, seconds: int, step: int) -> int:
         return (seconds // step + 1) * step

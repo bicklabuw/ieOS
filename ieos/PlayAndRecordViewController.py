@@ -18,6 +18,7 @@ from gui.utils.recording_format import (
     WAV_SUBTYPE,
     list_usb_recording_devices,
 )
+from ieos.mic_selection_store import get_enabled_slots_for_count
 from gui.utils.recording_metadata import write_session_metadata
 from gui.utils.recording_wav import write_queue_to_soundfile
 from gui.utils.usb.USBDriveManager import (
@@ -31,15 +32,16 @@ MAX_FILE_RECORD_TIME = 3600
 
 class PlayAndRecordViewController(ViewController[None]):
     """
-    Plays a WAV file and simultaneously records from all USB mics.
+    Plays a WAV file and simultaneously records from selected USB mics (by logical slot).
     Recording duration = file duration. Key2 stops both.
-    File naming: …mic<slot>…wav with slot 0..n-1 (matches mic test order), not ALSA hw numbers.
+    File naming: …mic<slot>…wav — slot is the global mic index (mic test order), not ALSA hw numbers.
     """
 
     def __init__(self, file_path: str, name: str) -> None:
         super().__init__()
         self._file_path = file_path
         self._name = name
+        self._recording_slots: list[int] = []
         self._stopped = False
         self.stop_recording = False
 
@@ -76,6 +78,14 @@ class PlayAndRecordViewController(ViewController[None]):
                 file_duration = int(len(f) / f.samplerate) + 1
         except Exception:
             self._status.text = "File error!"
+            time.sleep(2)
+            self.pop_view_controller()
+            return
+
+        all_mics = list_usb_recording_devices()
+        self._recording_slots = get_enabled_slots_for_count(len(all_mics))
+        if not self._recording_slots:
+            self._status.text = "No mics to record"
             time.sleep(2)
             self.pop_view_controller()
             return
@@ -119,9 +129,10 @@ class PlayAndRecordViewController(ViewController[None]):
         num_channels = CHANNELS
         sample_rate = SAMPLE_RATE
 
-        mics = list_usb_recording_devices()
-        mic_ids = [d["index"] for d in mics]
-        mic_slots = list(range(len(mic_ids)))
+        all_mics = list_usb_recording_devices()
+        mic_entries: list[tuple[int, int]] = [
+            (all_mics[slot]["index"], slot) for slot in self._recording_slots
+        ]
 
         write_session_metadata(
             get_recordings_path(),
@@ -129,7 +140,7 @@ class PlayAndRecordViewController(ViewController[None]):
             recording_mode="playback_record",
             source_wav=os.path.basename(self._file_path),
             duration_seconds=actual_time,
-            mic_indices=mic_slots,
+            mic_indices=list(self._recording_slots),
             sample_rate=SAMPLE_RATE,
             wav_name_pattern=f"{file_prefix}_mic<index>.wav",
         )
@@ -194,7 +205,7 @@ class PlayAndRecordViewController(ViewController[None]):
                 break
 
             mic_threads = []
-            for slot, mic_id in enumerate(mic_ids):
+            for mic_id, slot in mic_entries:
                 q = queue.Queue()
                 t = threading.Thread(target=record, args=[mic_id, slot, q])
                 mic_threads.append(t)
