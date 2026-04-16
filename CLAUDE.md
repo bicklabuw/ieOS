@@ -30,12 +30,20 @@ python3 -m gui.ui_kit.KeyboardViewController
 
 ## Installing Dependencies
 
+Install the `gui` framework in editable mode from the repo root (PyPI distribution name `ieos-gui`; import package remains `gui`):
+
+```bash
+pip install -e .
+```
+
+Or install dependencies only:
+
 ```bash
 pip install -r gui/requirements.txt
 pip install -r ieos/requirements.txt   # if present
 ```
 
-Linux-only packages (`smbus`, `spidev`, `RPi.GPIO`, `lgpio`) are conditionally installed.
+Linux-only packages (`smbus`, `spidev`, `RPi.GPIO`, `lgpio`) are conditionally installed; for Pi hardware extras use `pip install -e .[rpi]` or `pip install ieos-gui[rpi]` once the package is published.
 
 ## Package Structure
 
