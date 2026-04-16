@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ieos-gui"
-version = "0.1.0"
+version = "0.2.0"
 description = "Insect Eavesdropper OS GUI framework (OLED UI for Raspberry Pi and desktop dev modes)"
 readme = "README.md"
 requires-python = ">=3.9"
