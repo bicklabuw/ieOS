@@ -133,6 +133,8 @@ class PlayAndRecordViewController(ViewController[None]):
         mic_entries: list[tuple[int, int]] = [
             (all_mics[slot]["index"], slot) for slot in self._recording_slots
         ]
+        n_mics = len(self._recording_slots)
+        mic_word = "mic" if n_mics == 1 else "mics"
 
         write_session_metadata(
             get_recordings_path(),
@@ -185,7 +187,10 @@ class PlayAndRecordViewController(ViewController[None]):
         def countdown(total):
             remaining = total
             while remaining >= 0 and not self.stop_recording and threading.current_thread() is cnt_thread:
-                self._status.text = f"Play+Rec\n{get_duration_text(remaining)} left"
+                self._status.text = (
+                    f"Play+Rec\nwith {n_mics} {mic_word}\n"
+                    f"{get_duration_text(remaining)} left"
+                )
                 if remaining == 0:
                     return
                 else:

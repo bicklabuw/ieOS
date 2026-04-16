@@ -18,13 +18,13 @@ from gui.utils.recording_format import list_usb_recording_devices
 from ieos.mic_selection_store import get_enabled_slots_for_count, set_enabled_slots
 
 # ---------------------------------------------------------------------------
-# Layout constants
+# Layout constants (64px tall display; bottom row for centered hint)
 # ---------------------------------------------------------------------------
 _BAR_TOP       = 2
-_BAR_BOTTOM    = 46  # leave room for mic index labels below bars
+_BAR_BOTTOM    = 34  # bar shell ends here; selection box extends +2px below
 _BAR_H         = _BAR_BOTTOM - _BAR_TOP
-_MIC_LABEL_Y   = 48  # single-digit row beneath bar outline
-_HINT_Y        = 54
+_MIC_LABEL_Y   = 37  # below selection chrome (~36), clear gap before hint
+_HINT_Y        = 50  # moved up with bars shortened by the same amount
 
 # Fixed bar geometry per mic count: (bar_w, gap, left_margin)
 _BAR_GEOMETRY = {
@@ -165,7 +165,8 @@ class _MicCheckView(CoordinateView):
 
         if self._hint_text:
             hb = draw.textbbox((0, 0), self._hint_text, font=font)
-            draw.text((SCREEN_WIDTH - (hb[2] - hb[0]) - 2, _HINT_Y),
+            hw = hb[2] - hb[0]
+            draw.text(((SCREEN_WIDTH - hw) / 2, _HINT_Y),
                       self._hint_text, fill=Display.ON, font=font)
 
 
@@ -188,8 +189,8 @@ class MicTestViewController(ViewController[bool]):
 
     def _hint_for_mode(self) -> str:
         if self._show_go:
-            return "L/R B:tog K2 K3"
-        return "L/R B:tog K2"
+            return "L/R B:toggle K2 K3"
+        return "L/R B:toggle K2"
 
     def on_appear(self) -> None:
         super().on_appear()

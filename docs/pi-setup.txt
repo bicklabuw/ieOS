@@ -9,24 +9,32 @@
 Table of Contents
 _________________
 
-1. Install
-2. Sudo (USB mount / unmount / `blkid', system time)
-3. Run (from repo root)
+1. Prerequisites
+2. Install
+3. Sudo (USB mount / unmount / `blkid', system time)
+4. Run (from repo root)
 
 
-1 Install
+1 Prerequisites
+===============
+
+  Clone the repository (e.g. to `~/ieos'). Enable SPI for the OLED:
+  `sudo raspi-config' → Interface Options → SPI → Yes; reboot if
+  prompted.
+
+  Run the bootstrap script as your normal login user (not root).
+
+
+2 Install
 =========
 
   ,----
   |   cd ~/ieos
-  |   python3 -m venv .venv
-  |   source .venv/bin/activate
-  |   pip install -r gui/requirements.txt
-  |   pip install -r ieos/requirements.txt
+  |   bash scripts/pi-bootstrap.sh
   `----
 
 
-2 Sudo (USB mount / unmount / `blkid', system time)
+3 Sudo (USB mount / unmount / `blkid', system time)
 ===================================================
 
   Run once after clone so the app can use `sudo -n' without a password
@@ -37,7 +45,7 @@ _________________
   `----
 
 
-3 Run (from repo root)
+4 Run (from repo root)
 ======================
 
   ,----

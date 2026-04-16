@@ -91,6 +91,9 @@ class RecordViewController(ViewController[None]):
             time.sleep(2)
             return
 
+        n_mics = len(mic_slots)
+        mic_word = "mic" if n_mics == 1 else "mics"
+
         write_session_metadata(
             get_recordings_path(),
             file_prefix,
@@ -144,13 +147,16 @@ class RecordViewController(ViewController[None]):
 
         def countdown_indefinite():
             while not self.stop_recording and threading.current_thread() is cnt_thread:
-                self._status.text = "Recording..."
+                self._status.text = f"Recording...\nwith {n_mics} {mic_word}"
                 time.sleep(1)
 
         def countdown_timed(total):
             remaining = total
             while remaining >= 0 and not self.stop_recording and threading.current_thread() is cnt_thread:
-                self._status.text = f"Recording...\n{get_duration_text(remaining)} left"
+                self._status.text = (
+                    f"Recording...\nwith {n_mics} {mic_word}\n"
+                    f"{get_duration_text(remaining)} left"
+                )
                 if remaining == 0:
                     return
                 elif remaining <= 60:

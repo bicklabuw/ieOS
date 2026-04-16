@@ -2,9 +2,8 @@ from gui.ui_kit.TableViewController import TableViewController
 from ieos.FilesMenuViewController import FilesMenuViewController
 from ieos.RecordFlowViewController import RecordFlowViewController
 from ieos.MicTestViewController import MicTestViewController
-from ieos.PlayAndRecordViewController import PlayAndRecordViewController
 from ieos.SettingsViewController import SettingsViewController
-from ieos.PlayRecordFileSelectViewController import PlayRecordFileSelectViewController
+from ieos.PlayMenuViewController import PlayMenuViewController
 
 
 class MainMenuViewController(TableViewController):
@@ -18,9 +17,7 @@ class MainMenuViewController(TableViewController):
         if index == 0:
             self.push_view_controller(RecordFlowViewController())
         elif index == 1:
-            self.push_view_controller(
-                PlayRecordFileSelectViewController(PlayAndRecordViewController),
-            )
+            self.push_view_controller(PlayMenuViewController())
         elif index == 2:
             self.push_view_controller(MicTestViewController())
         elif index == 3:

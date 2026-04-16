@@ -1,24 +1,31 @@
 
 # Table of Contents
 
-1.  [Install](#org2f95bbd)
-2.  [Sudo (USB mount / unmount / `blkid`, system time)](#orgab211fe)
-3.  [Run (from repo root)](#orgd0de730)
+1.  [Prerequisites](#org70cde3f)
+2.  [Install](#org17036f6)
+3.  [Sudo (USB mount / unmount / `blkid`, system time)](#org014d976)
+4.  [Run (from repo root)](#org2de1e26)
 
 
 
-<a id="org2f95bbd"></a>
+<a id="org70cde3f"></a>
+
+# Prerequisites
+
+Clone the repository (e.g. to `~/ieos`). Enable SPI for the OLED: `sudo raspi-config` → Interface Options → SPI → Yes; reboot if prompted.
+
+Run the bootstrap script as your normal login user (not root).
+
+
+<a id="org17036f6"></a>
 
 # Install
 
     cd ~/ieos
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install -r gui/requirements.txt
-    pip install -r ieos/requirements.txt
+    bash scripts/pi-bootstrap.sh
 
 
-<a id="orgab211fe"></a>
+<a id="org014d976"></a>
 
 # Sudo (USB mount / unmount / `blkid`, system time)
 
@@ -28,7 +35,7 @@ Run once after clone so the app can use `sudo -n` without a password prompt:
     sudo bash scripts/pi-sudo-setup.sh
 
 
-<a id="orgd0de730"></a>
+<a id="org2de1e26"></a>
 
 # Run (from repo root)
 

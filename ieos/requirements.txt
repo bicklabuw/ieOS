@@ -1,13 +1,2 @@
-# TODO
-gpiozero 
-soundfile 
-sounddevice 
-numpy
-pillow
-Pillow
-pynput
-pygame
-smbus; sys_platform=='linux'
-spidev; sys_platform=='linux'
-RPi.GPIO; sys_platform=='linux'
-lgpio; sys_platform=='linux'
+# Same packages as ../gui/requirements.txt. Prefer: pip install -e ".[rpi]" from repo root (pyproject.toml).
+-r ../gui/requirements.txt
