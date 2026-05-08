@@ -1,0 +1,29 @@
+{
+  "name": "default_catalog_60min_nominal",
+  "description": "Nominal wall-time sum is about 60 minutes before IEOS_TESTBENCH_TIME_SCALE. Requires USB pendrive with /WAV and at least one USB mic.",
+  "steps": [
+    {"id": "preflight", "type": "preflight_usb_mics"},
+    {"id": "main_ready", "type": "wait_for_vc", "class": "MainMenuViewController", "timeout_sec": 25},
+
+    {"id": "cancel_at_name", "type": "macro", "name": "cancel_record_at_keyboard"},
+
+    {"id": "record_short", "type": "macro", "name": "record_flow_60"},
+    {"id": "have_wav", "type": "assert_glob_min", "pattern": "*.wav", "min": 1},
+
+    {"id": "idle_1", "type": "wait", "seconds": 600},
+    {"id": "long_record_a", "type": "macro", "name": "record_flow_600_default"},
+
+    {"id": "idle_2", "type": "wait", "seconds": 600},
+
+    {"id": "play_listen", "type": "macro", "name": "play_listen_flow"},
+    {"id": "mic_visit", "type": "macro", "name": "mic_test_visit"},
+    {"id": "files_browse", "type": "macro", "name": "files_browse_flow"},
+    {"id": "settings", "type": "macro", "name": "settings_tour"},
+
+    {"id": "idle_3", "type": "wait", "seconds": 600},
+    {"id": "long_record_b", "type": "macro", "name": "record_flow_600_default"},
+
+    {"id": "tail", "type": "wait", "seconds": 120},
+    {"id": "done_log", "type": "log", "text": "catalog complete"}
+  ]
+}

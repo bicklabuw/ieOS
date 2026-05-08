@@ -77,7 +77,8 @@ class NumberInputView(CoordinateView):
         value=0,
         min_value=0,
         max_value=99,
-        digit_padding=0
+        digit_padding=0,
+        hold_step: int = 1,
     ):
         super().__init__(x=x, y=y, width=width, height=height)
         self.digit_padding = digit_padding
@@ -102,6 +103,7 @@ class NumberInputView(CoordinateView):
         self.min_value = min_value
         self.max_value = max_value
         self.enabled = enabled
+        self.hold_step = max(1, hold_step)
         self.value = value
         self.outline_y = ARROW_PADDING
         self._refresh_display_text()
@@ -150,25 +152,51 @@ class NumberInputView(CoordinateView):
         super().on_deselect()
         self._refresh_display_text()
 
+    def _nudge_up_once(self) -> None:
+        self.value += 1
+        if self.value > self.max_value:
+            if self.wraparound:
+                self.value = self.min_value
+            else:
+                self.value = self.max_value
+
+    def _nudge_down_once(self) -> None:
+        self.value -= 1
+        if self.value < self.min_value:
+            if self.wraparound:
+                self.value = self.max_value
+            else:
+                self.value = self.min_value
+
+    def _nudge_up(self, steps: int) -> None:
+        for _ in range(steps):
+            self._nudge_up_once()
+
+    def _nudge_down(self, steps: int) -> None:
+        for _ in range(steps):
+            self._nudge_down_once()
+
     def on_up_press(self):
         if self.enabled:
-            self.value += 1
-            if self.value > self.max_value:
-                if self.wraparound:
-                    self.value = self.min_value
-                else:
-                    self.value = self.max_value
+            self._nudge_up(1)
+            self._refresh_display_text()
+        return True
+
+    def on_up_hold(self):
+        if self.enabled:
+            self._nudge_up(self.hold_step)
             self._refresh_display_text()
         return True
 
     def on_down_press(self):
         if self.enabled:
-            self.value -= 1
-            if self.value < self.min_value:
-                if self.wraparound:
-                    self.value = self.max_value
-                else:
-                    self.value = self.min_value
+            self._nudge_down(1)
+            self._refresh_display_text()
+        return True
+
+    def on_down_hold(self):
+        if self.enabled:
+            self._nudge_down(self.hold_step)
             self._refresh_display_text()
         return True
 
@@ -181,28 +209,6 @@ class IndexToStringMappingInputView(NumberInputView):
     def _format_value_text(self) -> str:
         return f"{self.mappings[self.value-1]}"
 
-    def on_up_press(self):
-        if self.enabled:
-            self.value += 1
-            if self.value > self.max_value:
-                if self.wraparound:
-                    self.value = self.min_value
-                else:
-                    self.value = self.max_value
-            self._refresh_display_text()
-        return True
-
-    def on_down_press(self):
-        if self.enabled:
-            self.value -= 1
-            if self.value < self.min_value:
-                if self.wraparound:
-                    self.value = self.max_value
-                else:
-                    self.value = self.min_value
-            self._refresh_display_text()
-        return True
-
 class TimeInputView(View):
     def __init__(self, x=0, y=0, width=Display.SCREEN_WIDTH, height=Display.SCREEN_HEIGHT, hint_text="BTN: DONE"):
         super().__init__(x=x, y=y, width=width, height=height)
@@ -210,8 +216,12 @@ class TimeInputView(View):
         self.row_spacing = 7
 
         self.hours = NumberInputView(x=0, y=0, width=24, height=14, value=0, min_value=0, max_value=23, digit_padding=2)
-        self.minutes = NumberInputView(x=0, y=0, width=24, height=14, value=0, min_value=0, max_value=59, digit_padding=2)
-        self.seconds = NumberInputView(x=0, y=0, width=24, height=14, value=0, min_value=0, max_value=59, digit_padding=2)
+        self.minutes = NumberInputView(
+            x=0, y=0, width=24, height=14, value=0, min_value=0, max_value=59, digit_padding=2, hold_step=5
+        )
+        self.seconds = NumberInputView(
+            x=0, y=0, width=24, height=14, value=0, min_value=0, max_value=59, digit_padding=2, hold_step=5
+        )
 
         self.sep_left = TextView(x=0, y=0, text=":", anchor=TextAnchor.LEFT_TOP, fill=Display.ON)
         self.sep_right = TextView(x=0, y=0, text=":", anchor=TextAnchor.LEFT_TOP, fill=Display.ON)

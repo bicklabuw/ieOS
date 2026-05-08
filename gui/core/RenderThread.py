@@ -1,7 +1,8 @@
 import logging
+import sys
 import time
 from gui.ui_core.View import View
-from gui.core.OSGlobals import get_current_view_controller, get_debug_viewer
+from gui.core.OSGlobals import get_current_view_controller, get_debug_viewer, peek_process_exit_code
 import gui.core.Display as Display
 
 _log = logging.getLogger(__name__)
@@ -34,6 +35,11 @@ def render_thread(frame_time: float, on_disp: bool = True, on_screen: bool = Fal
     screen_cur_wait_frames = 0
 
     while True:
+        exit_code = peek_process_exit_code()
+        if exit_code is not None:
+            _log.info("process exit requested (code=%s)", exit_code)
+            sys.exit(exit_code)
+
         start = time.time()
         vc = get_current_view_controller()
         if vc is None:

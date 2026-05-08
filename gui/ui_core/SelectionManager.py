@@ -55,7 +55,10 @@ class SelectionManager:
             return
         if idx >= len(siblings):
             idx = len(siblings) - 1
-        self.current = siblings[idx]
+        next_view = siblings[idx]
+        if self.current is not None and self.current is not next_view:
+            self.current.on_deselect()
+        self.current = next_view
         self.current.on_select()
         # if len(siblings) == 1:
             # self.drill_in()
@@ -111,7 +114,15 @@ class SelectionManager:
             stop_index,
         )
 
-        self.current.on_deselect()
+        # Re-selecting the same view: full path below would on_deselect() then never
+        # re-enter this leaf, leaving no highlight (e.g. TableView after set_items).
+        if self.current is not None and self.current is view:
+            view.on_deselect()
+            view.on_select()
+            return
+
+        if self.current is not None:
+            self.current.on_deselect()
         for _ in range(stop_index, len(self._stack)):
             self.current = self._stack.pop()
 

@@ -24,28 +24,51 @@ from gui.core.logging_config import configure_logging
 _log = logging.getLogger(__name__)
 
 VC_Heirarchy = deque()
+_vc_stack_lock = threading.Lock()
+
+
+def get_view_controller_stack_names() -> list[str]:
+    """Snapshot of nav stack class names (for testbench assertions)."""
+    with _vc_stack_lock:
+        return [type(vc).__name__ for vc in VC_Heirarchy]
+
 
 def update_vc_heirarchy(vc_transition: ViewControllerTransition) -> Optional[ViewController]:
     global VC_Heirarchy
-    if vc_transition.type == ViewControllerTransitionType.PUSH:
-        VC_Heirarchy.append(vc_transition.vc)
-        _log.debug("nav stack after PUSH: %s", list(VC_Heirarchy))
-    elif vc_transition.type == ViewControllerTransitionType.SWAP:
-        VC_Heirarchy.pop()
-        VC_Heirarchy.append(vc_transition.vc)
-    elif vc_transition.type == ViewControllerTransitionType.CLEAR:
-        VC_Heirarchy.clear()
-        VC_Heirarchy.append(vc_transition.vc)
-    elif vc_transition.type == ViewControllerTransitionType.POP:
-        _log.debug("nav stack before POP: %s", list(VC_Heirarchy))
-        VC_Heirarchy.pop()
-        return VC_Heirarchy[-1]
-    elif vc_transition.type == ViewControllerTransitionType.POP_TO_ROOT:
-        # Return the root view controller and clear the heirarchy
-        root_vc = VC_Heirarchy.popleft()
-        VC_Heirarchy.clear()
-        VC_Heirarchy.append(root_vc)
-        return root_vc
+    with _vc_stack_lock:
+        if vc_transition.type == ViewControllerTransitionType.PUSH:
+            VC_Heirarchy.append(vc_transition.vc)
+            _log.debug("nav stack after PUSH: %s", list(VC_Heirarchy))
+        elif vc_transition.type == ViewControllerTransitionType.SWAP:
+            if not VC_Heirarchy:
+                _log.warning("SWAP requested with empty nav stack; treating as CLEAR")
+            else:
+                VC_Heirarchy.pop()
+            VC_Heirarchy.append(vc_transition.vc)
+        elif vc_transition.type == ViewControllerTransitionType.CLEAR:
+            VC_Heirarchy.clear()
+            VC_Heirarchy.append(vc_transition.vc)
+        elif vc_transition.type == ViewControllerTransitionType.POP:
+            _log.debug("nav stack before POP: %s", list(VC_Heirarchy))
+            # If there's 0 or 1 VCs, POP should be a no-op (stay on root).
+            if not VC_Heirarchy:
+                _log.warning("POP requested with empty nav stack; ignoring")
+                return None
+            if len(VC_Heirarchy) == 1:
+                _log.debug("POP at root view controller; ignoring")
+                return VC_Heirarchy[-1]
+            VC_Heirarchy.pop()
+            return VC_Heirarchy[-1]
+        elif vc_transition.type == ViewControllerTransitionType.POP_TO_ROOT:
+            # Return the root view controller and clear the heirarchy
+            if not VC_Heirarchy:
+                _log.warning("POP_TO_ROOT requested with empty nav stack; ignoring")
+                return None
+            root_vc = VC_Heirarchy[0]
+            VC_Heirarchy.clear()
+            VC_Heirarchy.append(root_vc)
+            return root_vc
+        return None
 
 
 def change_view_controller(vc_transition: ViewControllerTransition):
@@ -92,9 +115,18 @@ def view_controller_transition_thread(initial_view_controller: ViewController):
             _log.info("applying transition: %s", vc_transition)
             change_view_controller(vc_transition)
 
-def start_polling_thread(sleep_time: float, on_disp: bool = True, on_keyboard: bool = False):
+def start_polling_thread(
+    sleep_time: float,
+    on_disp: bool = True,
+    on_keyboard: bool = False,
+    testbench: bool = False,
+):
     # Create and start the polling thread
-    polling_thread = threading.Thread(target=PollingThread.polling_thread, args=(sleep_time, on_disp, on_keyboard), daemon=True)
+    polling_thread = threading.Thread(
+        target=PollingThread.polling_thread,
+        args=(sleep_time, on_disp, on_keyboard, testbench),
+        daemon=True,
+    )
     set_polling_thread(polling_thread)
     polling_thread.start()
 
@@ -113,6 +145,11 @@ def main(initial_view_controller: ViewController):
     parser.add_argument("-o", "--no_display", action='store_true', help="Only use keyboard input and OS's screen as output. No display needed in this configuration.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging (DEBUG)")
     parser.add_argument("-q", "--quiet", action="store_true", help="Quiet logging (WARNING and above)")
+    parser.add_argument(
+        "--testbench",
+        action="store_true",
+        help="Autonomous testbench: synthetic input only (no GPIO/keyboard polling)",
+    )
 
     args = parser.parse_args()
     configure_logging(verbose=args.verbose, quiet=args.quiet)
@@ -125,13 +162,18 @@ def main(initial_view_controller: ViewController):
     disp_out_en = not (args.screen_only or args.no_display or is_not_rpi)
     screen_en = args.screen or args.screen_only or args.no_display or is_not_rpi
 
+    if args.testbench:
+        disp_in_en = False
+        keyboard_en = False
+
     _log.info(
-        "starting ieOS main (raspberry_pi=%s, display_in=%s, display_out=%s, keyboard=%s, debug_screen=%s)",
+        "starting ieOS main (raspberry_pi=%s, display_in=%s, display_out=%s, keyboard=%s, debug_screen=%s, testbench=%s)",
         not is_not_rpi,
         disp_in_en,
         disp_out_en,
         keyboard_en,
         screen_en,
+        args.testbench,
     )
 
     # Init the display
@@ -142,7 +184,7 @@ def main(initial_view_controller: ViewController):
         from gui.core.DebugViewer import DebugViewer
         set_debug_viewer(DebugViewer((Display.SCREEN_WIDTH, Display.SCREEN_HEIGHT)))
 
-    start_polling_thread(POLLING_SLEEP_TIME, disp_in_en, keyboard_en)
+    start_polling_thread(POLLING_SLEEP_TIME, disp_in_en, keyboard_en, args.testbench)
     _log.debug("polling thread started (sleep=%.3fs)", POLLING_SLEEP_TIME)
     start_view_controller_transition_thread(initial_view_controller)
     _log.debug("view-controller transition thread started")
