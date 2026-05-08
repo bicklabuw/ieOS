@@ -14,7 +14,13 @@ from gui.core.Display import SCREEN_HEIGHT, SCREEN_WIDTH
 from PIL import ImageDraw, ImageFont
 from gui.ui_core.ViewController import ViewController
 from gui.ui_kit.Views import CoordinateView
-from gui.utils.recording_format import list_usb_recording_devices
+from gui.utils.recording_format import (
+    select_capture_blocksize,
+    SAMPLE_RATE,
+    USB_MIC_STREAM_START_STAGGER_SEC,
+    list_usb_recording_devices,
+    settle_portaudio_after_capture_close,
+)
 from ieos.mic_selection_store import get_enabled_slots_for_count, set_enabled_slots
 
 # ---------------------------------------------------------------------------
@@ -31,10 +37,8 @@ _BAR_GEOMETRY = {
     1: (60,  0, 34),
     2: (44, 16, 14),
     3: (30,  9, 10),
+    4: (27,  4,  4),  # left + 4*bar_w + 3*gap - 1 = 123 <= 127
 }
-
-_BLOCKSIZE = 512   # small block = low latency (~12ms at 44100Hz)
-
 
 class _MicCheckView(CoordinateView):
     """Single full-screen view that draws the entire mic check UI.
@@ -150,7 +154,7 @@ class _MicCheckView(CoordinateView):
                         py = _BAR_BOTTOM - pk
                         draw.line([(x0, py), (x1, py)], fill=Display.ON, width=1)
 
-                mark = "*" if on else "."
+                mark = "[x]" if on else "[ ]"
                 label = f"{mark}{i}"
                 lb = draw.textbbox((0, 0), label, font=font)
                 lw = lb[2] - lb[0]
@@ -171,6 +175,12 @@ class _MicCheckView(CoordinateView):
 
 
 class MicTestViewController(ViewController[bool]):
+    """Mic levels / slot enable. Hardware map:
+      KEY1 — proceed (GO) when ``show_go`` (record flow); returns False when off so KEY1 reaches TableView menus
+      KEY2 — back → pop(None)
+      LEFT / RIGHT — move mic selection; BUTTON — toggle enabled slot for selected mic
+      (No KEY3 GO — matches on-screen legend K1=GO.)
+    """
 
     def __init__(self, show_go: bool = False) -> None:
         super().__init__()
@@ -189,7 +199,7 @@ class MicTestViewController(ViewController[bool]):
 
     def _hint_for_mode(self) -> str:
         if self._show_go:
-            return "L/R B:toggle K2 K3"
+            return "L/R B:toggle K2 K1=GO"
         return "L/R B:toggle K2"
 
     def on_appear(self) -> None:
@@ -231,21 +241,38 @@ class MicTestViewController(ViewController[bool]):
 
     def _start_or_update_streams(self) -> None:
         n = len(self._mics)
+        capture_sample_rate = SAMPLE_RATE
+        capture_blocksize = select_capture_blocksize(n)
+        to_start = [i for i in range(n) if self._enabled[i] and self._streams[i] is None]
+        n_start = len(to_start)
+        for j, i in enumerate(to_start):
+            def _cb(indata, frames, t, status, _i=i):
+                if not self._stop:
+                    self._queues[_i].put(indata.copy())
+
+            try:
+                stream = sd.InputStream(
+                    device=self._mics[i]["index"],
+                    samplerate=capture_sample_rate,
+                    channels=1,
+                    blocksize=capture_blocksize,
+                    callback=_cb,
+                )
+                stream.start()
+                self._streams[i] = stream
+            except Exception:
+                # Keep mic test usable when one USB device cannot open
+                # with current ALSA/PortAudio parameters.
+                self._enabled[i] = False
+                self._view.set_enabled_list(self._enabled)
+                self._view.zero_slot(i)
+                self._view.set_texts(self._title_str, f"Mic {i} open failed")
+            if n_start >= 2 and j < n_start - 1:
+                time.sleep(USB_MIC_STREAM_START_STAGGER_SEC)
+
         for i in range(n):
             if self._enabled[i]:
-                if self._streams[i] is None:
-                    def _cb(indata, frames, t, status, _i=i):
-                        if not self._stop:
-                            self._queues[_i].put(indata.copy())
-
-                    stream = sd.InputStream(
-                        device=self._mics[i]["index"],
-                        channels=1,
-                        blocksize=_BLOCKSIZE,
-                        callback=_cb,
-                    )
-                    stream.start()
-                    self._streams[i] = stream
+                continue
             else:
                 if self._streams[i] is not None:
                     try:
@@ -327,21 +354,23 @@ class MicTestViewController(ViewController[bool]):
                 except Exception:
                     pass
                 self._streams[i] = None
+        settle_portaudio_after_capture_close()
 
     def on_key2_press(self) -> None:
         self._stop_all()
         self.pop_view_controller(None)
 
-    def on_key3_press(self) -> None:
+    def on_key1_press(self) -> bool:
         if not self._show_go:
-            return
+            return False
         if not self._mics:
-            return
+            return True
         if not any(self._enabled):
             self._view.set_texts(self._title_str, "Need 1+ mic")
-            return
+            return True
         self._stop_all()
         self.pop_view_controller(True)
+        return True
 
     def on_disappear(self) -> None:
         self._stop_all()

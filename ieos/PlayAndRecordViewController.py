@@ -15,12 +15,15 @@ from gui.core.Display import SCREEN_WIDTH, SCREEN_HEIGHT
 from gui.utils.recording_format import (
     CHANNELS,
     SAMPLE_RATE,
+    select_capture_blocksize,
+    settle_portaudio_after_capture_close,
+    USB_MIC_STREAM_START_STAGGER_SEC,
     WAV_SUBTYPE,
     list_usb_recording_devices,
 )
 from ieos.mic_selection_store import get_enabled_slots_for_count
 from gui.utils.recording_metadata import write_session_metadata
-from gui.utils.recording_wav import write_queue_to_soundfile
+from gui.utils.recording_wav import sync_recording_file, write_queue_to_soundfile
 from gui.utils.usb.USBDriveManager import (
     assert_recordings_still_ready,
     ensure_recordings_ready,
@@ -135,6 +138,8 @@ class PlayAndRecordViewController(ViewController[None]):
         ]
         n_mics = len(self._recording_slots)
         mic_word = "mic" if n_mics == 1 else "mics"
+        sample_rate = SAMPLE_RATE
+        capture_blocksize = select_capture_blocksize(n_mics)
 
         write_session_metadata(
             get_recordings_path(),
@@ -143,7 +148,7 @@ class PlayAndRecordViewController(ViewController[None]):
             source_wav=os.path.basename(self._file_path),
             duration_seconds=actual_time,
             mic_indices=list(self._recording_slots),
-            sample_rate=SAMPLE_RATE,
+            sample_rate=sample_rate,
             wav_name_pattern=f"{file_prefix}_mic<index>.wav",
         )
 
@@ -164,7 +169,7 @@ class PlayAndRecordViewController(ViewController[None]):
                 ) as wav_f:
                     with sd.InputStream(
                         samplerate=sample_rate,
-                        blocksize=750,
+                        blocksize=capture_blocksize,
                         device=mic_id,
                         channels=num_channels,
                         callback=callback,
@@ -176,10 +181,12 @@ class PlayAndRecordViewController(ViewController[None]):
                             q,
                             stop_check=lambda: self.stop_recording,
                             segment_end_time=end_t,
+                            durable_path=file_path,
                         )
                         if not ok:
                             self._status.text = f"Write error:\n{err}"
                             self.stop_recording = True
+                sync_recording_file(file_path)
             except Exception as e:
                 self._status.text = f"Error:\n{e}"
                 self.stop_recording = True
@@ -210,12 +217,14 @@ class PlayAndRecordViewController(ViewController[None]):
                 break
 
             mic_threads = []
-            for mic_id, slot in mic_entries:
+            n_ent = len(mic_entries)
+            for k, (mic_id, slot) in enumerate(mic_entries):
                 q = queue.Queue()
                 t = threading.Thread(target=record, args=[mic_id, slot, q])
                 mic_threads.append(t)
-            for t in mic_threads:
                 t.start()
+                if n_ent >= 2 and k < n_ent - 1:
+                    time.sleep(USB_MIC_STREAM_START_STAGGER_SEC)
             for t in mic_threads:
                 t.join()
             if self.stop_recording:
@@ -223,6 +232,11 @@ class PlayAndRecordViewController(ViewController[None]):
             actual_time -= duration
             if duration > actual_time:
                 duration = actual_time
+
+            if actual_time > 0 and not self.stop_recording:
+                settle_portaudio_after_capture_close(stop_streams=False)
+
+        settle_portaudio_after_capture_close(stop_streams=False)
 
         cnt_thread.join(0.5 if self.stop_recording else None)
         self._status.text = "Stopped" if self.stop_recording else "Done!"
