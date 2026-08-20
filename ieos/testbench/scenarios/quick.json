@@ -1,0 +1,15 @@
+{
+  "name": "quick_smoke",
+  "description": "Short sanity run (~2–3 min nominal): preflight, cancel-at-keyboard, one 60s-class recording path, WAV check. No multi-minute idles.",
+  "steps": [
+    {"id": "preflight", "type": "preflight_usb_mics"},
+    {"id": "main_ready", "type": "wait_for_vc", "class": "MainMenuViewController", "timeout_sec": 25},
+
+    {"id": "cancel_at_name", "type": "macro", "name": "cancel_record_at_keyboard"},
+
+    {"id": "record_short", "type": "macro", "name": "record_flow_60"},
+    {"id": "have_wav", "type": "assert_glob_min", "pattern": "*.wav", "min": 1},
+
+    {"id": "done_log", "type": "log", "text": "quick scenario complete"}
+  ]
+}

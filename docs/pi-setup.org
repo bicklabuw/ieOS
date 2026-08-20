@@ -1,0 +1,25 @@
+#+title: ieOS — Raspberry Pi setup
+
+* Prerequisites
+  Clone the repository (e.g. to =~/ieos=). Enable SPI for the OLED: =sudo raspi-config= → Interface Options → SPI → Yes; reboot if prompted.
+
+  Run the bootstrap script as your normal login user (not root).
+
+* Install
+  #+begin_src bash
+  cd ~/ieos
+  bash scripts/pi-bootstrap.sh
+  #+end_src
+
+* Sudo (USB mount / unmount / ~blkid~, system time)
+  Run once after clone so the app can use ~sudo -n~ without a password prompt:
+  #+begin_src bash
+  cd ~/ieos
+  sudo bash scripts/pi-sudo-setup.sh
+  #+end_src
+
+* Run (from repo root)
+  #+begin_src bash
+  cd ~/ieos
+  ./ie.sh
+  #+end_src
