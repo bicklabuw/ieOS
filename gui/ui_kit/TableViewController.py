@@ -208,16 +208,48 @@ class TableViewController(ViewController[str]):
     def set_sentinel_items(self, sentinels: list[str]) -> None:
         self._sentinel_items = list(sentinels)
         self._items = self._merge_items()
-        self._offset = 0
-        self._reload_cells()
-        self._update_arrows()
+        self._refresh_cells_preserving_position()
 
     def set_items(self, items: list[str]) -> None:
         self._base_items = list(items)
         self._items = self._merge_items()
-        self._offset = 0
+        self._refresh_cells_preserving_position()
+
+    def _refresh_cells_preserving_position(self) -> None:
+        current = self.selection.current
+        current_position = self._cells.index(current) if current in self._cells else 0
+        current_index = self._offset + current_position
+
+        max_offset = max(0, len(self._items) - len(self._cells))
+        if self._offset > max_offset:
+            self._offset = max_offset
         self._reload_cells()
         self._update_arrows()
+
+        if not self._items:
+            if current in self._cells:
+                current.on_deselect()
+            self.selection.current = None
+            return
+        target_index = max(0, min(current_index, len(self._items) - 1))
+        target_position = target_index - self._offset
+        if 0 <= target_position < len(self._cells):
+            target_cell = self._cells[target_position]
+            if target_cell.visible and target_cell.selectable:
+                self.selection.select(target_cell)
+                return
+        self._resync_table_selection_after_cell_reload()
+
+    def _resync_table_selection_after_cell_reload(self) -> None:
+        """Keep row highlight correct after cell text/visibility changes (e.g. returning from a child VC)."""
+        cur = self.selection.current
+        if cur is not None and cur in self._cells and cur.visible and cur.selectable:
+            self.selection.select(cur)
+            return
+        for cell in self._cells:
+            if cell.visible and cell.selectable:
+                self.selection.select(cell)
+                return
 
     def _reload_cells(self) -> None:
         for i, cell in enumerate(self._cells):

@@ -1,16 +1,41 @@
+import logging
 import time
 from typing import Dict
 import gui.core.Display as Display
 from gui.core.OSGlobals import get_polling, set_polling, get_current_view_controller, get_debug_viewer
-from gui.core.OSGlobals import KEY_INIT_CHG_WAIT_TIME, KEY_PRESSED_CHG_WAIT_TIME
+from gui.core.OSGlobals import (
+    KEY_INIT_CHG_WAIT_TIME,
+    KEY_PRESSED_CHG_WAIT_TIME,
+    KEY_REPEAT_INTERVAL,
+    get_runtime_testbench_input_enabled,
+)
 from gui.utils.InputUtils import InputCode, InputPhase
 
+_log = logging.getLogger(__name__)
 
-def polling_thread(sleep_time: float, on_disp: bool = True, on_keyboard: bool = False) -> None:
+
+def polling_thread(
+    sleep_time: float,
+    on_disp: bool = True,
+    on_keyboard: bool = False,
+    testbench: bool = False,
+) -> None:
     """
     Poll hardware inputs at `sleep_time` intervals, dispatching press/hold/release
     events into the current ViewController via on_event(code, phase, held).
+
+    Hold-repeat (periodic HOLD while a key stays down) runs only in the GPIO and
+    keyboard branches. When ieOS starts with ``--testbench``, Main disables both
+    branches and only drains the synthetic queue—so scenarios that enqueue
+    PRESS/RELEASE taps are unaffected by repeat timing.
     """
+    _log.info(
+        "polling thread running (display_gpio=%s, keyboard=%s, testbench=%s, interval=%.3fs)",
+        on_disp,
+        on_keyboard,
+        testbench,
+        sleep_time,
+    )
     set_polling()
     if on_disp:
         disp = Display.disp
@@ -29,16 +54,20 @@ def polling_thread(sleep_time: float, on_disp: bool = True, on_keyboard: bool = 
 
         # Tracking state per code
         prev_vals: Dict[InputCode, int] = {code: 0 for code in code_to_pin}
-        hold_time: Dict[InputCode, float] = {code: 0.0 for code in code_to_pin}
-        hold_fired: Dict[InputCode, bool] = {code: False for code in code_to_pin}
+        next_hold_at: Dict[InputCode, float] = {code: 0.0 for code in code_to_pin}
+        hold_occurred: Dict[InputCode, bool] = {code: False for code in code_to_pin}
 
     if on_keyboard:
         from gui.core.DebugViewer import DebugViewer
         debug_viewer: DebugViewer = get_debug_viewer()
 
         prev_keyboard_vals: Dict[InputCode, int] = {code: 0 for code in debug_viewer.code_to_keyboard}
-        hold_keyboard_time: Dict[InputCode, float] = {code: 0.0 for code in debug_viewer.code_to_keyboard}
-        hold_keyboard_fired: Dict[InputCode, bool] = {code: False for code in debug_viewer.code_to_keyboard}
+        next_keyboard_hold_at: Dict[InputCode, float] = {
+            code: 0.0 for code in debug_viewer.code_to_keyboard
+        }
+        hold_keyboard_occurred: Dict[InputCode, bool] = {
+            code: False for code in debug_viewer.code_to_keyboard
+        }
 
     while get_polling():
         time.sleep(sleep_time)
@@ -47,53 +76,64 @@ def polling_thread(sleep_time: float, on_disp: bool = True, on_keyboard: bool = 
             continue
 
         now = time.time()
-        if on_disp:
+        runtime_testbench = testbench or get_runtime_testbench_input_enabled()
+
+        if on_disp and not runtime_testbench:
             for code, pin in code_to_pin.items():
                 curr = disp.RPI.digital_read(pin)
                 prev = prev_vals[code]
 
-                # Press or Hold logic
+                # Press or repeating hold
                 if curr == 1:
                     if prev == 0:
-                        # Initial press
                         vc.on_event(code, InputPhase.PRESS)
-                        # Schedule a single hold event
-                        hold_time[code] = now + KEY_INIT_CHG_WAIT_TIME - KEY_PRESSED_CHG_WAIT_TIME
-                        hold_fired[code] = False
-                    elif not hold_fired[code] and now >= hold_time[code]:
+                        next_hold_at[code] = (
+                            now + KEY_INIT_CHG_WAIT_TIME - KEY_PRESSED_CHG_WAIT_TIME
+                        )
+                        hold_occurred[code] = False
+                    elif now >= next_hold_at[code]:
                         vc.on_event(code, InputPhase.HOLD)
-                        hold_fired[code] = True
+                        hold_occurred[code] = True
+                        next_hold_at[code] = now + KEY_REPEAT_INTERVAL
 
                 # Release logic
                 elif prev == 1:
-                    vc.on_event(code, InputPhase.RELEASE, hold_fired[code])
-                    hold_fired[code] = False
+                    vc.on_event(code, InputPhase.RELEASE, hold_occurred[code])
+                    hold_occurred[code] = False
 
                 prev_vals[code] = curr
 
-        if on_keyboard:
+        if on_keyboard and not runtime_testbench:
             keys_pressed = debug_viewer.poll_inputs()
             for code, key in debug_viewer.code_to_keyboard.items():
                     curr = 1 if key in keys_pressed else 0
                     prev = prev_keyboard_vals[code]
 
-                    # Press or Hold logic
+                    # Press or repeating hold
                     if curr == 1:
                         if prev == 0:
-                            print(f"Key Pressed: {key} - Code: {code}")
+                            _log.debug("keyboard key %r -> %s PRESS", key, code.name)
 
-                            # Initial press
                             vc.on_event(code, InputPhase.PRESS)
-                            # Schedule a single hold event
-                            hold_keyboard_time[code] = now + KEY_INIT_CHG_WAIT_TIME - KEY_PRESSED_CHG_WAIT_TIME
-                            hold_keyboard_fired[code] = False
-                        elif not hold_keyboard_fired[code] and now >= hold_keyboard_time[code]:
+                            next_keyboard_hold_at[code] = (
+                                now + KEY_INIT_CHG_WAIT_TIME - KEY_PRESSED_CHG_WAIT_TIME
+                            )
+                            hold_keyboard_occurred[code] = False
+                        elif now >= next_keyboard_hold_at[code]:
                             vc.on_event(code, InputPhase.HOLD)
-                            hold_keyboard_fired[code] = True
+                            hold_keyboard_occurred[code] = True
+                            next_keyboard_hold_at[code] = now + KEY_REPEAT_INTERVAL
 
                     # Release logic
                     elif prev == 1:
-                        vc.on_event(code, InputPhase.RELEASE, hold_keyboard_fired[code])
-                        hold_keyboard_fired[code] = False
+                        vc.on_event(
+                            code, InputPhase.RELEASE, hold_keyboard_occurred[code]
+                        )
+                        hold_keyboard_occurred[code] = False
 
                     prev_keyboard_vals[code] = curr
+
+        if runtime_testbench:
+            from gui.core import testbench_input
+
+            testbench_input.drain_queue_to(vc)

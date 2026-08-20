@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import time
 
@@ -70,13 +71,33 @@ def _find_usb_block_device() -> str | None:
     return None
 
 
+def _mount_source_is_device(src: str, device: str) -> bool:
+    """
+    True if src names the same block device as device.
+
+    Desktop udisks2 often records mounts as /dev/disk/by-uuid/... in /proc/mounts
+    while we discover the stick as /dev/sda1; a plain string compare misses that
+    and triggers a second mount (EBUSY / mount failed).
+    """
+    if src == device:
+        return True
+    try:
+        return bool(
+            os.path.exists(src)
+            and os.path.exists(device)
+            and os.path.samefile(src, device)
+        )
+    except OSError:
+        return False
+
+
 def _get_mount_point(device: str) -> str | None:
     """Return the current mount point of device, or None if not mounted."""
     try:
         with open('/proc/mounts') as f:
             for line in f:
                 parts = line.split()
-                if parts and parts[0] == device:
+                if len(parts) >= 2 and _mount_source_is_device(parts[0], device):
                     return parts[1]
     except OSError:
         pass
@@ -89,6 +110,29 @@ def get_recordings_path() -> str:
     if _active_mount_point is None:
         raise OSError("USB drive not mounted")
     return _active_mount_point + PENDRIVE_RECORDINGS_DIR
+
+
+def get_active_mount_point() -> str | None:
+    """Return current active mount point if mounted, else None."""
+    refresh_mount_state()
+    return _active_mount_point
+
+
+def get_recordings_filesystem_free_bytes() -> int | None:
+    """
+    Free space on the filesystem that holds /WAV, if the drive is mounted and path exists.
+    Returns None if not mounted or usage cannot be read.
+    """
+    refresh_mount_state()
+    if _active_mount_point is None:
+        return None
+    try:
+        path = get_recordings_path()
+        if not os.path.isdir(path):
+            return None
+        return shutil.disk_usage(path).free
+    except OSError:
+        return None
 
 
 def _verify_dir_writable(dir_path: str) -> None:
@@ -177,6 +221,12 @@ def mount_pendrive() -> None:
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
+        # udisks may have auto-mounted after our first check (common on desktop Pi OS).
+        time.sleep(_MOUNT_RETRY_DELAY_SEC)
+        existing_after = _get_mount_point(device)
+        if existing_after:
+            _active_mount_point = existing_after
+            return
         raise OSError(f"mount failed: {result.stderr.strip()}")
 
     _active_mount_point = _DEFAULT_MOUNT_POINT

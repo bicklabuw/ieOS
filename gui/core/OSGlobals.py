@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 import threading
 from queue import SimpleQueue
 from typing import TYPE_CHECKING, Optional
@@ -14,8 +15,11 @@ POLLING_SLEEP_TIME: float = 50 / 1000
 JOIN_TIMEOUT_TIME = 1
 KEY_INIT_CHG_WAIT_TIME = 0.5
 KEY_PRESSED_CHG_WAIT_TIME = 0.1
+KEY_REPEAT_INTERVAL = KEY_PRESSED_CHG_WAIT_TIME
 
 _polling = False
+_runtime_testbench_input = False
+_runtime_testbench_input_lock = threading.Lock()
 
 _current_view_controller = None
 _view_controller_transitions = SimpleQueue()
@@ -26,6 +30,9 @@ _polling_thread = None
 _view_controller_thread = None
 
 _debug_viewer = None
+
+_log = logging.getLogger(__name__)
+
 
 def on_view_controller_transition_thread_thread() -> bool:
     return threading.current_thread() == _view_controller_transition_thread
@@ -59,14 +66,14 @@ def clear_view_controller_changed_flag():
 
 def pop_view_controller_transition() -> ViewControllerTransition:
     global _view_controller_transitions
-    print("VC Getting")
-    return _view_controller_transitions.get()
+    t = _view_controller_transitions.get()
+    _log.debug("dequeued VC transition (blocked until available): %s", t)
+    return t
 
 def put_view_controller_transition(vc_transition: ViewControllerTransition):
     global _view_controller_transitions
-    print("Putting: ", vc_transition)
+    _log.debug("enqueue VC transition: %s", vc_transition)
     _view_controller_transitions.put(vc_transition)
-    print("Updated VC Transitions List: ", _view_controller_transitions)
 
 def set_view_controller_thread(vc_thread: threading.Thread):
     # Only allow on main thread
@@ -108,6 +115,17 @@ def stop_polling_input():
     global _polling
     _polling = False
 
+
+def set_runtime_testbench_input_enabled(enabled: bool) -> None:
+    global _runtime_testbench_input
+    with _runtime_testbench_input_lock:
+        _runtime_testbench_input = enabled
+
+
+def get_runtime_testbench_input_enabled() -> bool:
+    with _runtime_testbench_input_lock:
+        return _runtime_testbench_input
+
 def get_debug_viewer():
     global _debug_viewer
     return _debug_viewer
@@ -115,3 +133,22 @@ def get_debug_viewer():
 def set_debug_viewer(debug_viewer):
     global _debug_viewer
     _debug_viewer = debug_viewer
+
+
+# Requested by testbench / shutdown hooks; render (main) thread calls sys.exit when set.
+_process_exit_code: Optional[int] = None
+_process_exit_lock = threading.Lock()
+
+
+def request_process_exit(code: int = 0) -> None:
+    """Thread-safe. First non-None request wins until the render thread exits."""
+    global _process_exit_code
+    with _process_exit_lock:
+        if _process_exit_code is None:
+            _process_exit_code = code
+
+
+def peek_process_exit_code() -> Optional[int]:
+    """Render thread: if not None, exit the process with this code."""
+    with _process_exit_lock:
+        return _process_exit_code

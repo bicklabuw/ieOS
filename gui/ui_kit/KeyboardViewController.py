@@ -255,13 +255,23 @@ class KeyboardViewController(ViewController[str]):
         self.select(nearest)
         return True
 
+    def _select_nearest_bottom_control(self) -> bool:
+        current = self.selection.current
+        if current is None:
+            return False
+
+        controls = self._bottom_controls()
+        cur_cx = current.abs_x + (current.width / 2)
+        nearest = min(controls, key=lambda k: abs((k.abs_x + (k.width / 2)) - cur_cx))
+        self.select(nearest)
+        return True
+
     def on_down_press(self):
         current = self.selection.current
         if current in self.char_keys:
             idx = self.char_keys.index(current)
             if (idx // self.GRID_COLS) == (self.GRID_ROWS - 1):
-                self.select(self.space_key)
-                return True
+                return self._select_nearest_bottom_control()
         return self.selection.move(Direction.DOWN)
 
     def on_up_press(self):
