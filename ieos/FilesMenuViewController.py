@@ -8,7 +8,7 @@ from gui.ui_kit.TableViewController import TableViewController
 from gui.utils.recording_format import (
     count_usb_input_mics,
     estimate_record_seconds_remaining,
-    format_compact_duration_h_m,
+    format_compact_duration_d_h,
 )
 from gui.utils.usb.USBDriveManager import (
     ensure_recordings_ready,
@@ -56,7 +56,7 @@ class FilesMenuViewController(TableViewController):
             return "Free: (no mics)"
         sec = estimate_record_seconds_remaining(free_b, mics)
         mic_lbl = "mic" if mics == 1 else "mics"
-        return f"~{format_compact_duration_h_m(sec)} ({mics} {mic_lbl})"
+        return f"~{format_compact_duration_d_h(sec)} ({mics} {mic_lbl})"
 
     def _refresh_stats_row(self) -> None:
         items = [self._stats_label(), "Browse", "Delete all WAVs"]

@@ -1,4 +1,14 @@
 from __future__ import annotations
+# ieos/RecordSetupViewController.py
+#
+# Hardware key map (recording duration screen):
+#   KEY1 — +1 min press / hold +5 min (coarse snap up)
+#   KEY2 — back / cancel → pop(None), same pattern as menus & keyboard
+#   KEY3 — −1 min press / hold −5 min (coarse snap down)
+#   BUTTON — confirm duration (GO) → pop(seconds)
+#   RIGHT — reset to default duration (was BUTTON)
+#   LEFT — open mic check (MicTest without show_go)
+#   UP/DOWN — coarse joystick duration (snapped steps; hold accelerates)
 
 import gui.core.Display as Display
 import gui.core.Main as Main
@@ -161,7 +171,7 @@ class RecordSetupViewController(ViewController[int]):
         self._display = _DurationDisplayView(0, 0, _BOX_W)
 
         self._hint = TextView(
-            0, 0, text="K3: GO",
+            0, 0, text="BTN: GO R: rst",
             anchor=TextAnchor.LEFT_TOP, fill=Display.ON,
         )
         self._hint.selectable = False
@@ -178,7 +188,7 @@ class RecordSetupViewController(ViewController[int]):
         n_hw = count_usb_input_mics()
         count = len(get_enabled_slots_for_count(n_hw)) if n_hw else 0
         noun = "MIC" if count == 1 else "MICS"
-        self._hint.text = f"K3: GO ({count} {noun})"
+        self._hint.text = f"BTN: GO  R: rst ({count} {noun})"
         self._refresh_usb_line()
 
     # ------------------------------------------------------------------
@@ -272,7 +282,7 @@ class RecordSetupViewController(ViewController[int]):
         return True
 
     # ------------------------------------------------------------------
-    # Key1 / Key2 — fine ±1 min, hold ±5 min
+    # Key1 — +1 min press, +5 min hold (same as prior KEY1)
     # ------------------------------------------------------------------
     def on_key1_press(self) -> None:
         self._set_duration(self._display.seconds + KEY_FINE_STEP)
@@ -280,17 +290,20 @@ class RecordSetupViewController(ViewController[int]):
     def on_key1_hold(self) -> None:
         self._set_duration(self._snap_up(self._display.seconds, KEY_COARSE_STEP))
 
+    # ------------------------------------------------------------------
+    # Key2 — back / cancel (matches menus & keyboard)
+    # ------------------------------------------------------------------
     def on_key2_press(self) -> None:
-        self._set_duration(self._display.seconds - KEY_FINE_STEP)
-
-    def on_key2_hold(self) -> None:
-        self._set_duration(self._snap_down(self._display.seconds, KEY_COARSE_STEP))
+        self.pop_view_controller(None)
 
     # ------------------------------------------------------------------
-    # Key3 — confirm
+    # Key3 — −1 min press, −5 min hold (duration was on KEY2 before)
     # ------------------------------------------------------------------
     def on_key3_press(self) -> None:
-        self.pop_view_controller(self._display.seconds)
+        self._set_duration(self._display.seconds - KEY_FINE_STEP)
+
+    def on_key3_hold(self) -> None:
+        self._set_duration(self._snap_down(self._display.seconds, KEY_COARSE_STEP))
 
     # ------------------------------------------------------------------
     # Left — mic test
@@ -300,10 +313,17 @@ class RecordSetupViewController(ViewController[int]):
         return True
 
     # ------------------------------------------------------------------
-    # Button — reset to default
+    # Right — reset to default duration
+    # ------------------------------------------------------------------
+    def on_right_press(self) -> bool:
+        self._set_duration(DEFAULT_DURATION)
+        return True
+
+    # ------------------------------------------------------------------
+    # Button — confirm duration (GO)
     # ------------------------------------------------------------------
     def on_button_press(self) -> bool:
-        self._set_duration(DEFAULT_DURATION)
+        self.pop_view_controller(self._display.seconds)
         return True
 
 

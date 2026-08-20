@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+from gui.utils.durable_io import write_text_atomic
 from gui.utils.PlatformUtils import get_device_serial
 
 _log = logging.getLogger(__name__)
@@ -35,8 +36,7 @@ def write_session_metadata(recordings_dir: str, file_prefix: str, **fields: Any)
         lines.append(f"{key}: {_format_value(fields[key])}")
     body = "\n".join(lines) + "\n"
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(body)
+        write_text_atomic(path, body)
     except OSError as e:
         _log.warning("Could not write recording metadata %s: %s", path, e)
         return None

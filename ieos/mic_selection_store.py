@@ -8,6 +8,8 @@ import logging
 import os
 from typing import Iterable
 
+from gui.utils.durable_io import write_json_atomic
+
 _log = logging.getLogger(__name__)
 
 _CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "ieos")
@@ -49,14 +51,10 @@ def get_enabled_slots_for_count(n: int) -> list[int]:
 
 
 def set_enabled_slots(slots: Iterable[int]) -> None:
-    """Write enabled slot indices to disk (best-effort)."""
+    """Write enabled slot indices to disk durably (best-effort on errors)."""
     unique = sorted({int(i) for i in slots})
     payload = {"enabled_slots": unique}
     try:
-        os.makedirs(_CONFIG_DIR, mode=0o755, exist_ok=True)
-        path = _STORE_PATH + ".tmp"
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
-        os.replace(path, _STORE_PATH)
+        write_json_atomic(_STORE_PATH, payload)
     except OSError as e:
         _log.warning("Could not save mic selection: %s", e)
