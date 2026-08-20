@@ -1,0 +1,2 @@
+# Same packages as ../gui/requirements.txt. Prefer: pip install -e ".[rpi]" from repo root (pyproject.toml).
+-r ../gui/requirements.txt
