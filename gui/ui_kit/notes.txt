@@ -1,0 +1,18 @@
+0 width and height -> TableViewController
+
+list version beneath title and show version in settings view
+0.2
+automate testing
+- create a small suite
+- prioritize ensuring recoridng and saving to wav files
+
+delete wav files on device, maybe add a viewcontroller for files ivewing, delete all files or delete 
+
+logging -> python logging Module
+show pendrive space left (in time) -- tableview add Pendrive Stats or a USB drive sub table
+- also show when you are choosing the amount of time to record for
+pre recording tests
+
+save pi serial number to file on the pendrive
+- new metadata file with this for each recording
+four mics -- not as important

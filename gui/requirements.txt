@@ -1,0 +1,13 @@
+# TODO — source of truth: ../pyproject.toml. Pi deploy: bash scripts/pi-bootstrap.sh or pip install -e ".[rpi]"
+gpiozero 
+soundfile 
+sounddevice 
+numpy
+pillow
+Pillow
+pynput
+pygame
+smbus; sys_platform=='linux'
+spidev; sys_platform=='linux'
+RPi.GPIO; sys_platform=='linux'
+lgpio; sys_platform=='linux'
